@@ -53,20 +53,8 @@ namespace Compiler {
         }
     }
 
-    public class ForLoop : Loop {
-        public ForLoop(int row, int col, Expression condition) : base(row, col, condition) { }
-    }
-
     public class WhileLoop : Loop {
         public WhileLoop(int row, int col, Expression condition) : base(row, col, condition) { }
-    }
-
-    public class BreakStatement : Statement {
-        public BreakStatement(int row, int col) : base(row, col) { }
-    }
-
-    public class ContinueStatement : Statement {
-        public ContinueStatement(int row, int col) : base(row, col) { }
     }
 
     public class DefStatement : Statement, IVariableTableContainer {
