@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Compiler {
+﻿namespace Compiler {
     class Program {
         // todo fix path to code file
         public static readonly string Code = System.IO.File.ReadAllText(@"C:\Study\SP_course_work\toParse.py");
@@ -12,7 +10,9 @@ namespace Compiler {
             lexer.GetTokens();
             lexer.PrintTokens();
             var parser = new Parser(lexer.GetTokensList());
-            // var ast = parser.GetAst();
+            var ast = parser.GetAst();
+            AsmGenerator gen = new AsmGenerator(ast);
+            gen.GenerateAsm();
         }
     }
 }
