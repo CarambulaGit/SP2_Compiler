@@ -119,15 +119,15 @@ namespace Compiler {
                         baseNode.AddChild(temp);
                         break;
                     }
-                    // case TokenKind.PRINT: {
-                    //     var temp = new Print(_enumerator.Current.row, _enumerator.Current.column);
-                    //     Match(TokenKind.LPAR);
-                    //     temp.expr = ParseExpr();
-                    //     _enumerator.MovePrevious();
-                    //     MatchCurrent(TokenKind.RPAR);
-                    //     baseNode.AddChild(temp);
-                    //     break;
-                    // }
+                    case TokenKind.PRINT: {
+                        var temp = new Print(_enumerator.Current.row, _enumerator.Current.column);
+                        Match(TokenKind.LPAR);
+                        temp.expr = ParseExpr();
+                        _enumerator.MovePrevious();
+                        MatchCurrent(TokenKind.RPAR);
+                        baseNode.AddChild(temp);
+                        break;
+                    }
                     case TokenKind.RETURN: {
                         if (_currentNameSpace.GetType() != typeof(DefStatement)) {
                             throw new SyntaxException($"Return outside of function at {_enumerator.Current.row}:" +
