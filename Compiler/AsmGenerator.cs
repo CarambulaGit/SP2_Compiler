@@ -50,8 +50,8 @@ public class AsmGenerator {
                                "jmp Loop{0}start\n" +
                                "Loop{0}end:\n"
         },
-        {typeof(Print), "{0}printf(str$(eax))\nprintf(\"\\n\")\n"}
-        // {typeof(Print), "fn MessageBoxA,0,str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n"}
+        // {typeof(Print), "{0}printf(str$(eax))\nprintf(\"\\n\")\n"}
+        {typeof(Print), "{0}fn MessageBoxA,0, str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n"}
     };
 
     private const string ProcTemplate = "{0} PROC\n" +
@@ -81,7 +81,7 @@ public class AsmGenerator {
                                    "\n" +
                                    "{1}" + // insert code
                                    "\n" +
-                                   "fn MessageBoxA,0,str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n" +
+                                   // "fn MessageBoxA,0,str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n" +
                                    "printf(\"\\n\")\n" +
                                    "inkey\n" +
                                    "\nret\n\n" +
