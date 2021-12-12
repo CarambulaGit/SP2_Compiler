@@ -8,9 +8,11 @@ namespace Compiler {
 
         private static void Main(string[] args) {
             var codeWithSpaces = Code.Replace("\t", FOUR_SPACES);
-            var l = new Lexer(codeWithSpaces);
-            l.GetTokens();
-            l.PrintTokens();
+            var lexer = new Lexer(codeWithSpaces);
+            lexer.GetTokens();
+            lexer.PrintTokens();
+            var parser = new Parser(lexer.GetTokensList());
+            // var ast = parser.GetAst();
         }
     }
 }
