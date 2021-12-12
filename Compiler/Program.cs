@@ -2,6 +2,7 @@
 
 namespace Compiler {
     class Program {
+        // todo fix path to code file
         public static readonly string Code = System.IO.File.ReadAllText(@"C:\Study\SP_course_work\toParse.py");
         public const string FOUR_SPACES = "    ";
 
