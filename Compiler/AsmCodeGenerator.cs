@@ -5,10 +5,10 @@ using System.Linq;
 using System.Text;
 using Compiler;
 
-public class AsmGenerator {
-    private readonly Ast _base;
+public class AsmCodeGenerator {
+    private readonly AstTree _base;
 
-    private IVariableTableContainer _currentNameSpace;
+    private INamespace _currentNameSpace;
 
     private List<string> _functionProtoNames;
 
@@ -17,8 +17,7 @@ public class AsmGenerator {
     private List<string> _statements;
 
     private string _currModule = "MyModule";
-    private int _currentFreeId = 0;
-    private string? _currentLoopId = null;
+    private int _currentFreeId;
 
     private static readonly Dictionary<Type, string> TemplateDict = new Dictionary<Type, string>() {
         {typeof(CallStatement), "call {0}\n"},
@@ -41,7 +40,7 @@ public class AsmGenerator {
                                           "{2}" +
                                           "{1}else:\n"
         }, {
-            typeof(WhileLoop), "Loop{0}start:\n" +
+            typeof(WhileLoopStatement), "Loop{0}start:\n" +
                                "{1}" +
                                "pop eax\n" +
                                "cmp eax, 0\n" +
@@ -51,7 +50,7 @@ public class AsmGenerator {
                                "Loop{0}end:\n"
         },
         // {typeof(Print), "{0}printf(str$(eax))\nprintf(\"\\n\")\n"}
-        {typeof(Print), "{0}fn MessageBoxA,0, str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n"}
+        {typeof(PrintStatement), "{0}fn MessageBoxA,0, str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n"}
     };
 
     private const string ProcTemplate = "{0} PROC\n" +
@@ -89,7 +88,7 @@ public class AsmGenerator {
                                    "{2}" + // insert functions
                                    "END _start\n";
 
-    public AsmGenerator(Ast Base) {
+    public AsmCodeGenerator(AstTree Base) {
         _base = Base;
         _functions = new List<string>();
         _statements = new List<string>();
@@ -98,17 +97,17 @@ public class AsmGenerator {
     }
 
     public void GenerateAsm() {
-        foreach (var child in _base.root.GetChildren()) {
+        foreach (var child in _base.Root.GetChildren()) {
             _statements.Add(GenerateCode(child));
         }
 
-        using (FileStream fs = File.Create(
+        using (var fs = File.Create(
             "output.asm")) {
-            byte[] info = new UTF8Encoding(true).GetBytes(
+            var info = new UTF8Encoding(true).GetBytes(
                 string.Format(_templateMasm, string.Join("", _functionProtoNames.ToArray()),
                     string.Join("", _statements.ToArray()),
                     string.Join("", _functions.ToArray()),
-                    (_currentNameSpace.GetVarLen() * 4).ToString()));
+                    (_currentNameSpace.varTable.Count * 4).ToString()));
             fs.Write(info, 0, info.Length);
         }
     }
@@ -136,34 +135,32 @@ public class AsmGenerator {
         return "\n";
     }
 
-    private string GenerateWhileLoop(WhileLoop whileLoop) {
+    private string GenerateWhileLoop(WhileLoopStatement whileLoopStatement) {
         var id = GenerateId();
-        _currentLoopId = id;
         //Console.WriteLine(GenerateExpr(whileLoop.Condition));
-        var ret = string.Format(TemplateDict[whileLoop.GetType()], id,
-            GenerateExpr(whileLoop.Condition),
-            GenerateCode(whileLoop.GetChildren()[0]));
-        _currentLoopId = null;
+        var ret = string.Format(TemplateDict[whileLoopStatement.GetType()], id,
+            GenerateExpr(whileLoopStatement.Condition),
+            GenerateCode(whileLoopStatement.GetChildren()[0]));
         return ret;
     }
 
-    private string GenerateBinExpr(BinOp e) {
+    private string GenerateBinExpr(BinaryOperationExpression e) {
         string code;
         var a = GenerateExpr(e.LeftExpression);
         var b = GenerateExpr(e.RightExpression);
-        if (e.Op == TokenKind.MINUS) {
+        if (e.Op == TokenType.Subtract) {
             code = $"{b}\n{a}\npop eax\npop ecx\nsub eax, ecx\npush eax\n";
         }
-        else if (e.Op == TokenKind.STAR) {
+        else if (e.Op == TokenType.Multiply) {
             code = $"{b}\n{a}\npop eax\npop ecx\nimul ecx\npush eax\n";
         }
-        else if (e.Op == TokenKind.SLASH) {
+        else if (e.Op == TokenType.Divide) {
             code = $"{b}\n{a}\npop eax\npop ebx\nxor edx, edx\ndiv ebx\npush eax\n";
         }
-        else if (e.Op == TokenKind.NOTEQUAL) {
+        else if (e.Op == TokenType.NotEqual) {
             code = $"{b}\n{a}\npop eax\npop ecx\ncmp eax, ecx\nmov eax, 0\nsetne al\npush eax\n";
         }
-        else if (e.Op == TokenKind.GREATER) {
+        else if (e.Op == TokenType.Greater) {
             code = $"{b}\n{a}\npop eax\npop ecx\ncmp ecx, eax\nmov eax, 0\nsetl al\npush eax\n";
         }
         else {
@@ -174,18 +171,18 @@ public class AsmGenerator {
         return code;
     }
 
-    private string GenerateUnExpr(UnOp e) {
-        string code = "";
-        var expr = GenerateExpr(e.Expression);
-        if (e.Op == TokenKind.MINUS) {
-            code = expr + $"\npop eax\nneg eax\npush eax\n";
-        }
-        else {
-            throw new CompilerException($"Sorry, but {e.Op.ToString()} not implemented yet");
-        }
-
-        return code;
-    }
+    // private string GenerateUnExpr(UnOp e) {
+    //     string code = "";
+    //     var expr = GenerateExpr(e.Expression);
+    //     if (e.Op == TokenKind.MINUS) {
+    //         code = expr + $"\npop eax\nneg eax\npush eax\n";
+    //     }
+    //     else {
+    //         throw new CompilerException($"Sorry, but {e.Op.ToString()} not implemented yet");
+    //     }
+    //
+    //     return code;
+    // }
 
     private string GenerateConstExpr(ConstExpression e) {
         return $"\tpush {e.Data}\n";
@@ -231,9 +228,9 @@ public class AsmGenerator {
 
     private string GenerateExpr(Expression e) {
         return e switch {
-            BinOp binop => GenerateBinExpr(binop),
-            UnOp unop => GenerateUnExpr(unop),
-            ConstExpression constExpression => GenerateConstExpr(constExpression),
+            BinaryOperationExpression binop => GenerateBinExpr(binop),
+            // UnOp unop => GenerateUnExpr(unop),
+            ConstExpression constExpression => GenerateConstExpr(constExpression), // todo remove?
             VarExpression varExpression => GenerateVarExpr(varExpression),
             CallExpression callExpression => GenerateCallExpression(callExpression),
             ConditionalExpression conditionalExpression => GenerateConditionalExpression(conditionalExpression),
@@ -245,12 +242,9 @@ public class AsmGenerator {
         return $"{_currModule}{_currentFreeId++}";
     }
 
-    private string GetVarOffset(string var) {
-        if (_currentNameSpace.GetVarIndex(var) < 0) {
-            return $"+{-_currentNameSpace.GetVarIndex(var)}";
-        }
-
-        return $"-{_currentNameSpace.GetVarIndex(var)}";
+    private string GetVarOffset(string varName) {
+        // todo remove?
+        return _currentNameSpace.varTable[varName] < 0 ? $"+{-_currentNameSpace.varTable[varName]}" : $"-{_currentNameSpace.varTable[varName]}";
     }
 
     private string TrimPush(string s) {
@@ -273,11 +267,11 @@ public class AsmGenerator {
             //blockStatement.GetChildren().S,
             AssignStatement assignStatement =>
                 string.Format(TemplateDict[assignStatement.GetType()],
-                    GenerateExpr(assignStatement.VarExpr),
+                    GenerateExpr(assignStatement.Expression),
                     GetVarOffset(assignStatement.VarName)),
             ExprStatement exprStatement =>
                 string.Format(TemplateDict[exprStatement.GetType()],
-                    TrimPush(GenerateExpr(exprStatement.expr))),
+                    TrimPush(GenerateExpr(exprStatement.Expression))),
             ConditionalElseStatement conditionalElseStatement =>
                 string.Format(TemplateDict[conditionalElseStatement.GetType()],
                     GenerateExpr(conditionalElseStatement.Condition),
@@ -290,13 +284,13 @@ public class AsmGenerator {
                     GenerateExpr(conditionalStatement.Condition),
                     GenerateId(),
                     GenerateCode(conditionalStatement.GetChildren()[0])),
-            WhileLoop whileLoop =>
+            WhileLoopStatement whileLoop =>
                 GenerateWhileLoop(whileLoop),
             DefStatement defStatement =>
                 GenerateFunction(defStatement),
             ReturnStatement returnStatement =>
                 GenerateReturn(returnStatement.Expr),
-            Print print =>
+            PrintStatement print =>
                 string.Format(TemplateDict[print.GetType()],
                     TrimPush(GenerateExpr(print.expr))),
             _ => throw new CompilerException(

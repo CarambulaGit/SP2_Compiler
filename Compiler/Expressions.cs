@@ -2,6 +2,34 @@
 using System.Collections.Generic;
 
 namespace Compiler {
+    // todo 
+    // typedef enum ExprKind {
+    //     EXPR_NONE,
+    //     EXPR_INT,
+    //     EXPR_FLOAT,
+    //     EXPR_UNARY,
+    //     EXPR_BINARY,
+    // } ExprKind;
+    //
+    // struct Expr {
+    //     ExprKind kind;
+    //     struct Type* type;
+    //     union {
+    //         int64_t int_val;
+    //         double float_val;
+    //         char char_val;
+    //         struct {
+    //             TokenKind op;
+    //             Expr* expr;
+    //         } unary;
+    //         struct {
+    //             TokenKind op;
+    //             Expr* left;
+    //             Expr* right;
+    //         } binary;
+    //     };
+    // };
+    // todo file Expressions with all expressions and etc
     public abstract class Expression : AstNode {
         protected Expression(int row, int col) : base(row, col) { }
 
@@ -10,7 +38,7 @@ namespace Compiler {
         }
 
         public virtual void PrintOp(int depth) {
-            for (int i = 0; i < depth; i++) {
+            for (var i = 0; i < depth; i++) {
                 Console.Write('\t');
             }
 
@@ -35,7 +63,7 @@ namespace Compiler {
 
         public override void PrintOp(int depth) {
             base.PrintOp(depth);
-            for (int i = 0; i <= depth; i++) {
+            for (var i = 0; i <= depth; i++) {
                 Console.Write('\t');
             }
 
@@ -69,7 +97,7 @@ namespace Compiler {
 
         public override void PrintOp(int depth) {
             base.PrintOp(depth);
-            for (int i = 0; i <= depth; i++) {
+            for (var i = 0; i <= depth; i++) {
                 Console.Write('\t');
             }
 
@@ -86,7 +114,7 @@ namespace Compiler {
 
         public override void PrintOp(int depth) {
             base.PrintOp(depth);
-            for (int i = 0; i <= depth; i++) {
+            for (var i = 0; i <= depth; i++) {
                 Console.Write('\t');
             }
 
@@ -94,35 +122,35 @@ namespace Compiler {
         }
     }
 
-    public class UnOp : Expression {
-        public readonly TokenKind Op;
+    // public class UnOp : Expression {
+    //     public readonly TokenKind Op;
+    //
+    //     public readonly Expression Expression;
+    //
+    //     public UnOp(int row, int col, TokenKind op, Expression e) : base(row, col) {
+    //         Op = op;
+    //         Expression = e;
+    //     }
+    //
+    //     public override void PrintOp(int depth) {
+    //         base.PrintOp(depth);
+    //         for (var i = 0; i <= depth; i++) {
+    //             Console.Write('\t');
+    //         }
+    //
+    //         Console.WriteLine(Op.ToString());
+    //         Expression.PrintOp(depth + 1);
+    //     }
+    // }
 
-        public readonly Expression Expression;
-
-        public UnOp(int row, int col, TokenKind op, Expression e) : base(row, col) {
-            Op = op;
-            Expression = e;
-        }
-
-        public override void PrintOp(int depth) {
-            base.PrintOp(depth);
-            for (var i = 0; i <= depth; i++) {
-                Console.Write('\t');
-            }
-
-            Console.WriteLine(Op.ToString());
-            Expression.PrintOp(depth + 1);
-        }
-    }
-
-    public class BinOp : Expression {
-        public readonly TokenKind Op;
+    public class BinaryOperationExpression : Expression {
+        public readonly TokenType Op;
 
         public readonly Expression LeftExpression;
 
         public readonly Expression RightExpression;
 
-        public BinOp(int row, int col, TokenKind op, Expression le, Expression re) : base(row, col) {
+        public BinaryOperationExpression(int row, int col, TokenType op, Expression le, Expression re) : base(row, col) {
             Op = op;
             LeftExpression = le;
             RightExpression = re;

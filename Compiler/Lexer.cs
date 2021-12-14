@@ -4,15 +4,18 @@ using System.Linq;
 using System.Text;
 
 namespace Compiler {
+    // todo lexer + parser + generator = static????
     public class Lexer {
         private readonly string _code;
 
+        // todo to Consts?
         public static readonly List<char> Symbols = new List<char>() {
             '(', ')', '*', ',', '-', '/', ':', '=', '>', '!',
         };
 
         private List<Token> _tokens = new List<Token>();
-
+        
+        // todo rename levelVlojenosti?
         private int _currentLevel;
 
         public Lexer(string code) {
@@ -20,12 +23,12 @@ namespace Compiler {
             _currentLevel = 0;
         }
 
-        public void GetTokens() {
+        public void Tokenize() {
             var strings = _code.Split(Environment.NewLine);
             for (var i = 0; i < strings.Length; i++) {
                 if (ParseLine(strings[i], i)) {
                     _tokens.Add(new Token() {
-                        Kind = TokenKind.NEWLINE,
+                        Type = TokenType.Newline,
                         data = @"\n",
                         row = i,
                         column = strings[i].Length
@@ -51,45 +54,51 @@ namespace Compiler {
 
         private bool ParseLine(string line, int row) {
             // todo out result
+            // todo method find indent/dedent
+            // todo extension string.WithOut, fix comment finding
             if (line.Length != 0 &&
                 line[0].Equals('#') ||
                 line.All(s => s == '\t')) {
                 return false;
             }
-
-            var tabsC = CountTabs(line);
-            if (tabsC - _currentLevel > 1) {
+            //todo rename
+            var newCurrentLevel = CountTabs(line);
+            if (newCurrentLevel - _currentLevel > 1) {
                 throw new CompilerException($"Not expected indent at {row + 1}");
             }
 
-            if (tabsC - _currentLevel == 1) {
-                _currentLevel = tabsC;
+            if (newCurrentLevel - _currentLevel == 1) {
+                _currentLevel = newCurrentLevel;
                 _tokens.Add(new Token() {
-                    Kind = TokenKind.INDENT,
+                    Type = TokenType.Indent,
                     data = "\t",
                     row = row,
                     column = 0
                 });
             }
-            else if (_currentLevel - tabsC > 0) {
-                for (var i = 0; i < _currentLevel - tabsC; i++) {
+            else if (_currentLevel - newCurrentLevel > 0) {
+                var difference = _currentLevel - newCurrentLevel;
+                while (difference > 0) {
                     _tokens.Add(new Token() {
-                        Kind = TokenKind.DEDENT,
+                        Type = TokenType.Dedent,
                         data = null,
-                        row = row - 1 // todo ????
+                        row = row,
+                        column = difference
                     });
+                    difference--;
                 }
 
-                _currentLevel = tabsC;
+                _currentLevel = newCurrentLevel;
             }
 
-            var pos = tabsC;
+            var pos = newCurrentLevel;
 
             while (pos < line.Length) {
                 //Console.WriteLine(str[pos]);
                 if (line[pos] == ' ') {
                     pos++;
                 }
+                // todo remove when change comment detection
                 else if (line[pos] == '#') {
                     return true;
                 }
@@ -109,7 +118,7 @@ namespace Compiler {
 
         private int StartsWithDigit(string str, int row, int col) {
             var pos = col;
-            var type = TokenKind.INT;
+            var type = TokenType.IntegerNumber;
             var st = new StringBuilder(str.Length - col);
             while (pos < str.Length) {
                 if (char.IsDigit(str[pos])) {
@@ -126,12 +135,14 @@ namespace Compiler {
                 pos++;
             }
 
-            if (type == TokenKind.INT) {
-                int res = 0;
+            
+            // todo just write string?
+            if (type == TokenType.IntegerNumber) {
+                var res = 0;
                 //Console.WriteLine(st.ToString());
                 if (int.TryParse(st.ToString(), out res)) {
                     _tokens.Add(new Token() {
-                        Kind = TokenKind.INT,
+                        Type = TokenType.IntegerNumber,
                         data = res,
                         row = row,
                         column = col
@@ -172,64 +183,65 @@ namespace Compiler {
                 pos++;
             }
 
-            if (st.ToString().Equals("def")) {
-                _tokens.Add(new Token() {
-                    Kind = TokenKind.DEF,
-                    data = st.ToString(),
-                    row = row,
-                    column = col
-                });
-            }
-
-            else if (st.ToString().Equals("while")) {
-                _tokens.Add(new Token() {
-                    Kind = TokenKind.WHILE,
-                    data = st.ToString(),
-                    row = row,
-                    column = col
-                });
-            }
-
-            else if (st.ToString().Equals("print")) {
-                _tokens.Add(new Token() {
-                    Kind = TokenKind.PRINT,
-                    data = st.ToString(),
-                    row = row,
-                    column = col
-                });
-            }
-            else if (st.ToString().Equals("return")) {
-                _tokens.Add(new Token() {
-                    Kind = TokenKind.RETURN,
-                    data = st.ToString(),
-                    row = row,
-                    column = col
-                });
-            }
-            else if (st.ToString().Equals("if")) {
-                _tokens.Add(new Token() {
-                    Kind = TokenKind.IF,
-                    data = st.ToString(),
-                    row = row,
-                    column = col
-                });
-            }
-            else if (st.ToString().Equals("else")) {
-                _tokens.Add(new Token() {
-                    Kind = TokenKind.ELSE,
-                    data = st.ToString(),
-                    row = row,
-                    column = col
-                });
-            }
-            else {
-                _tokens.Add(new Token() {
-                    Kind = TokenKind.NAME,
-                    data = st.ToString(),
-                    row = row,
-                    column = col
-                });
-                //Console.WriteLine(_tokens[^1].ToString());
+            switch (st.ToString()) {
+                // todo make names consts 
+                case "def":
+                    _tokens.Add(new Token() {
+                        Type = TokenType.FuncDefinition,
+                        data = st.ToString(),
+                        row = row,
+                        column = col
+                    });
+                    break;
+                case "while":
+                    _tokens.Add(new Token() {
+                        Type = TokenType.WhileLoop,
+                        data = st.ToString(),
+                        row = row,
+                        column = col
+                    });
+                    break;
+                case "print":
+                    _tokens.Add(new Token() {
+                        Type = TokenType.PrintOperator,
+                        data = st.ToString(),
+                        row = row,
+                        column = col
+                    });
+                    break;
+                case "return":
+                    _tokens.Add(new Token() {
+                        Type = TokenType.Return,
+                        data = st.ToString(),
+                        row = row,
+                        column = col
+                    });
+                    break;
+                case "if":
+                    _tokens.Add(new Token() {
+                        Type = TokenType.IfCondition,
+                        data = st.ToString(),
+                        row = row,
+                        column = col
+                    });
+                    break;
+                case "else":
+                    _tokens.Add(new Token() {
+                        Type = TokenType.ElseCondition,
+                        data = st.ToString(),
+                        row = row,
+                        column = col
+                    });
+                    break;
+                default:
+                    _tokens.Add(new Token() {
+                        Type = TokenType.Identifier,
+                        data = st.ToString(),
+                        row = row,
+                        column = col
+                    });
+                    //Console.WriteLine(_tokens[^1].ToString());
+                    break;
             }
 
             return st.ToString().Length;
@@ -250,9 +262,9 @@ namespace Compiler {
 
             if (st.Length > 0) {
                 if (st.Length >= 2) {
-                    if (LexerTwoChars(str[col], str[col + 1]) != TokenKind.OP) {
+                    if (LexerTwoChars(str[col], str[col + 1]) != TokenType.OP) {
                         _tokens.Add(new Token() {
-                            Kind = LexerTwoChars(str[col], str[col + 1]),
+                            Type = LexerTwoChars(str[col], str[col + 1]),
                             data = LexerTwoChars(str[col], str[col + 1]).ToString(),
                             row = row,
                             column = col
@@ -261,9 +273,9 @@ namespace Compiler {
                     }
                 }
 
-                if (LexerOneChar(str[col]) != TokenKind.OP) {
+                if (LexerOneChar(str[col]) != TokenType.OP) {
                     _tokens.Add(new Token() {
-                        Kind = LexerOneChar(str[col]),
+                        Type = LexerOneChar(str[col]),
                         data = LexerOneChar(str[col]).ToString(),
                         row = row,
                         column = col
@@ -279,35 +291,35 @@ namespace Compiler {
         }
 
 
-        public TokenKind LexerOneChar(int c1) {
+        public TokenType LexerOneChar(int c1) {
             return c1 switch {
-                '(' => TokenKind.LPAR,
-                ')' => TokenKind.RPAR,
-                '*' => TokenKind.STAR,
-                ',' => TokenKind.COMMA,
-                '-' => TokenKind.MINUS,
-                '/' => TokenKind.SLASH,
-                ':' => TokenKind.COLON,
-                '=' => TokenKind.EQUAL,
-                '>' => TokenKind.GREATER,
-                _ => TokenKind.OP
+                '(' => TokenType.OpenBracket,
+                ')' => TokenType.CloseBracket,
+                '*' => TokenType.Multiply,
+                ',' => TokenType.Comma,
+                '-' => TokenType.Subtract,
+                '/' => TokenType.Divide,
+                ':' => TokenType.Colon,
+                '=' => TokenType.Assignment,
+                '>' => TokenType.Greater,
+                _ => TokenType.OP
             };
         }
 
-        public static TokenKind LexerTwoChars(int c1, int c2) {
+        public static TokenType LexerTwoChars(int c1, int c2) {
             switch (c1) {
                 case '!':
                     switch (c2) {
-                        case '=': return TokenKind.NOTEQUAL;
+                        case '=': return TokenType.NotEqual;
                     }
 
                     break;
             }
 
-            return TokenKind.OP;
+            return TokenType.OP;
         }
 
-        public List<Token> GetTokensList() {
+        public List<Token> GetTokens() {
             return _tokens;
         }
 

@@ -11,53 +11,53 @@ namespace Compiler {
 
         private readonly TwoWayEnum<Token> _enumerator;
 
-        private readonly Ast _base;
+        private readonly AstTree _base;
 
-        private Loop? _currentLoop = null;
+        private WhileLoopStatement? _currentLoop = null;
 
-        private IVariableTableContainer _currentNameSpace;
+        private INamespace _currentNameSpace;
 
         public Parser(List<Token> tokens) {
             _defAst = new Dictionary<string, AstNode>();
 
             _tokens = tokens;
 
-            _base = new Ast();
+            _base = new AstTree();
 
             _enumerator = new TwoWayEnum<Token>(_tokens.GetEnumerator());
 
             _currentNameSpace = _base;
-
-            ParseUntil(_base.root);
         }
 
-        private void ParseUntil(RootNode baseNode, TokenKind? stopToken = null) {
+        public void Parse() {
+            ParseUntil(_base.Root);
+        }
+
+        private void ParseUntil(RootNode baseNode, TokenType? stopToken = null) {
             while (_enumerator.MoveNext()) {
                 var token = _enumerator.Current;
-                if (token.Kind == stopToken) {
+                if (token.Type == stopToken) {
                     break;
                 }
 
-                switch (token.Kind) {
-                    case TokenKind.DEF: {
-                        DefStatement temp = null;
+                switch (token.Type) {
+                    case TokenType.FuncDefinition: {
+                        DefStatement temp;
                         switch (baseNode) {
-                            case IVariableTableContainer tableContainer: {
+                            case INamespace tableContainer:
                                 temp = ParseDef(new Dictionary<string, int>(tableContainer.varTable));
                                 break;
-                            }
-                            default: {
+                            default:
                                 temp = ParseDef(new Dictionary<string, int>(_base.varTable));
                                 break;
-                            }
                         }
 
                         baseNode.AddChild(temp);
                         break;
                     }
-                    case TokenKind.NAME: {
+                    case TokenType.Identifier: {
                         if (_enumerator.MoveNext()) {
-                            if (_enumerator.Current.Kind == TokenKind.EQUAL) {
+                            if (_enumerator.Current.Type == TokenType.Assignment) {
                                 _enumerator.MovePrevious();
                                 var name = _enumerator.Current.data;
                                 _enumerator.MoveNext();
@@ -68,7 +68,7 @@ namespace Compiler {
                                     _enumerator.Current.column,
                                     name, expr));
                                 switch (baseNode) {
-                                    case IVariableTableContainer tableContainer: {
+                                    case INamespace tableContainer: {
                                         tableContainer.AddVar(name);
                                         break;
                                     }
@@ -78,7 +78,7 @@ namespace Compiler {
                                     }
                                 }
                             }
-                            else if (_enumerator.Current.Kind == TokenKind.LPAR) {
+                            else if (_enumerator.Current.Type == TokenType.OpenBracket) {
                                 _enumerator.MovePrevious();
                                 var tempEx = ParseExpr();
                                 var temp = new ExprStatement(tempEx.Row, tempEx.Column, tempEx);
@@ -98,14 +98,14 @@ namespace Compiler {
 
                         break;
                     }
-                    case TokenKind.IF: {
+                    case TokenType.IfCondition: {
                         var temp = ParseConditional();
                         baseNode.AddChild(temp);
                         break;
                     }
-                    case TokenKind.INT:
-                    case TokenKind.MINUS:
-                    case TokenKind.LPAR: {
+                    case TokenType.IntegerNumber:
+                    case TokenType.Subtract:
+                    case TokenType.OpenBracket: {
                         var temp = new ExprStatement(_enumerator.Current.row,
                             _enumerator.Current.column,
                             ParseExpr());
@@ -114,21 +114,21 @@ namespace Compiler {
                         MatchIndentationCurrent();
                         break;
                     }
-                    case TokenKind.WHILE: {
+                    case TokenType.WhileLoop: {
                         var temp = ParseWhileLoop();
                         baseNode.AddChild(temp);
                         break;
                     }
-                    case TokenKind.PRINT: {
-                        var temp = new Print(_enumerator.Current.row, _enumerator.Current.column);
-                        Match(TokenKind.LPAR);
+                    case TokenType.PrintOperator: {
+                        var temp = new PrintStatement(_enumerator.Current.row, _enumerator.Current.column);
+                        Match(TokenType.OpenBracket);
                         temp.expr = ParseExpr();
                         _enumerator.MovePrevious();
-                        MatchCurrent(TokenKind.RPAR);
+                        MatchCurrent(TokenType.CloseBracket);
                         baseNode.AddChild(temp);
                         break;
                     }
-                    case TokenKind.RETURN: {
+                    case TokenType.Return: {
                         if (_currentNameSpace.GetType() != typeof(DefStatement)) {
                             throw new SyntaxException($"Return outside of function at {_enumerator.Current.row}:" +
                                                       $"{_enumerator.Current.column}",
@@ -154,11 +154,11 @@ namespace Compiler {
         private DefStatement ParseDef(Dictionary<string, int> varTable) {
             //Console.WriteLine(string.Join(", ", varTable.Keys));
             var def = new DefStatement(_enumerator.Current.row, _enumerator.Current.column, varTable) {
-                Name = this.Match(TokenKind.NAME).data,
+                Name = this.Match(TokenType.Identifier).data,
                 Args = this.MatchDefArgs()
             };
             def.FuncList = new List<DefStatement>(_currentNameSpace.FuncList);
-            _currentNameSpace.AddFunction(def);
+            _currentNameSpace.FuncList.Add(def);
             //def.Args.Reverse();
             foreach (var arg in def.Args) {
                 if (def.varTable.Keys.Contains(arg)) {
@@ -169,18 +169,18 @@ namespace Compiler {
                 def.AddArg(arg);
             }
 
-            this.Match(TokenKind.COLON);
+            this.Match(TokenType.Colon);
 
-            if (MatchBool(TokenKind.NEWLINE)) {
+            if (MatchBool(TokenType.Newline)) {
                 var prevNameSpace = _currentNameSpace;
                 _currentNameSpace = def;
-                ParseUntil(def, TokenKind.DEDENT);
+                ParseUntil(def, TokenType.Dedent);
                 _currentNameSpace = prevNameSpace;
             }
             else {
-                this.MatchCurrent(TokenKind.RETURN);
+                this.MatchCurrent(TokenType.Return);
                 def.Return = ParseExpr();
-                MatchCurrent(TokenKind.NEWLINE);
+                MatchCurrent(TokenType.Newline);
             }
 
             return def;
@@ -189,11 +189,11 @@ namespace Compiler {
         private Statement ParseWhileLoop() {
             var token = _enumerator.Current;
             _enumerator.MoveNext();
-            var ret = new WhileLoop(token.row,
+            var ret = new WhileLoopStatement(token.row,
                 token.column, ParseExpr());
             _currentLoop = ret;
             //_enumerator.MovePrevious();
-            MatchCurrent(TokenKind.COLON);
+            MatchCurrent(TokenType.Colon);
             if (!_enumerator.MoveNext()) {
                 _enumerator.MovePrevious();
                 throw new CompilerException(
@@ -201,13 +201,13 @@ namespace Compiler {
             }
 
             var body = new BlockStatement(_enumerator.Current.row, _enumerator.Current.column);
-            if (MatchCurrentBool(TokenKind.NEWLINE)) {
-                Match(TokenKind.INDENT);
+            if (MatchCurrentBool(TokenType.Newline)) {
+                Match(TokenType.Indent);
                 _enumerator.MovePrevious();
-                ParseUntil(body, TokenKind.DEDENT);
+                ParseUntil(body, TokenType.Dedent);
             }
             else {
-                ParseUntil(body, TokenKind.NEWLINE);
+                ParseUntil(body, TokenType.Newline);
             }
 
             ret.AddChild(body);
@@ -226,7 +226,7 @@ namespace Compiler {
             }
 
             var condition = ParseExpr();
-            MatchCurrent(TokenKind.COLON);
+            MatchCurrent(TokenType.Colon);
 
             var body = new BlockStatement(_enumerator.Current.row,
                 _enumerator.Current.column);
@@ -235,12 +235,12 @@ namespace Compiler {
                 throw new SyntaxException("Token expected",
                     _enumerator.Current.row, _enumerator.Current.column);
 
-            Match(TokenKind.INDENT);
+            Match(TokenType.Indent);
             _enumerator.MovePrevious();
             ParseUntil(body,
-                _enumerator.Current.Kind == TokenKind.NEWLINE ? TokenKind.DEDENT : TokenKind.NEWLINE);
+                _enumerator.Current.Type == TokenType.Newline ? TokenType.Dedent : TokenType.Newline);
 
-            if (MatchBool(TokenKind.ELSE)) {
+            if (MatchBool(TokenType.ElseCondition)) {
                 var conditionalElseStatement = new ConditionalElseStatement(rowCol.row,
                     rowCol.column,
                     condition
@@ -251,10 +251,10 @@ namespace Compiler {
                     throw new SyntaxException("Token expected",
                         _enumerator.Current.row, _enumerator.Current.column);
                 _enumerator.MoveNext();
-                Match(TokenKind.INDENT);
+                Match(TokenType.Indent);
                 _enumerator.MovePrevious();
                 ParseUntil(elseBody,
-                    _enumerator.Current.Kind == TokenKind.NEWLINE ? TokenKind.DEDENT : TokenKind.NEWLINE);
+                    _enumerator.Current.Type == TokenType.Newline ? TokenType.Dedent : TokenType.Newline);
                 conditionalElseStatement.AddChild(body);
                 conditionalElseStatement.AddChild(elseBody);
                 return conditionalElseStatement;
@@ -269,12 +269,12 @@ namespace Compiler {
             return conditionalStatement;
         }
 
-        private Token Match(TokenKind l) {
+        private Token Match(TokenType l) {
             if (_enumerator.MoveNext()) {
                 //Console.WriteLine(_enumerator.Current.Kind.ToString());
-                if (l != _enumerator.Current.Kind) {
+                if (l != _enumerator.Current.Type) {
                     //Console.WriteLine(_enumerator.Current.Kind.ToString());
-                    throw new SyntaxException("Got " + _enumerator.Current.Kind.ToString() +
+                    throw new SyntaxException("Got " + _enumerator.Current.Type.ToString() +
                                               $", {l.ToString()} expected" +
                                               $" at {_enumerator.Current.row + 1}:{_enumerator.Current.column + 1}",
                         _enumerator.Current.row, _enumerator.Current.column);
@@ -287,9 +287,9 @@ namespace Compiler {
             throw new SyntaxException();
         }
 
-        private Token MatchCurrent(TokenKind l) {
-            if (l != _enumerator.Current.Kind) {
-                throw new SyntaxException("Got " + _enumerator.Current.Kind.ToString() + $", {l.ToString()} expected" +
+        private Token MatchCurrent(TokenType l) {
+            if (l != _enumerator.Current.Type) {
+                throw new SyntaxException("Got " + _enumerator.Current.Type.ToString() + $", {l.ToString()} expected" +
                                           $" at {_enumerator.Current.row + 1}:{_enumerator.Current.column}",
                     _enumerator.Current.row, _enumerator.Current.column);
             }
@@ -298,22 +298,22 @@ namespace Compiler {
             return _enumerator.Current;
         }
 
-        private bool MatchBool(TokenKind l) {
+        private bool MatchBool(TokenType l) {
             if (_enumerator.MoveNext()) {
-                return l == _enumerator.Current.Kind;
+                return l == _enumerator.Current.Type;
             }
 
             return false;
         }
 
-        private bool MatchCurrentBool(TokenKind l) {
-            return l == _enumerator.Current.Kind;
+        private bool MatchCurrentBool(TokenType l) {
+            return l == _enumerator.Current.Type;
         }
 
         private void MatchIndentation() {
             if (_enumerator.MoveNext()) {
-                if (!MatchCurrentBool(TokenKind.NEWLINE) &&
-                    !MatchCurrentBool(TokenKind.DEDENT)) {
+                if (!MatchCurrentBool(TokenType.Newline) &&
+                    !MatchCurrentBool(TokenType.Dedent)) {
                     Console.WriteLine(_enumerator.Current.ToString());
                     throw new SyntaxException("Expected new line or semicolon");
                 }
@@ -321,8 +321,8 @@ namespace Compiler {
         }
 
         private void MatchIndentationCurrent() {
-            if (!MatchCurrentBool(TokenKind.NEWLINE) &&
-                !MatchCurrentBool(TokenKind.DEDENT)) {
+            if (!MatchCurrentBool(TokenType.Newline) &&
+                !MatchCurrentBool(TokenType.Dedent)) {
                 Console.WriteLine(_enumerator.Current.ToString());
                 throw new SyntaxException("Expected new line or semicolon");
             }
@@ -330,7 +330,7 @@ namespace Compiler {
 
         private Token MatchConst() {
             if (_enumerator.MoveNext()) {
-                if (_enumerator.Current.Kind != TokenKind.INT) {
+                if (_enumerator.Current.Type != TokenType.IntegerNumber) {
                     throw new SyntaxException();
                 }
 
@@ -342,7 +342,7 @@ namespace Compiler {
         }
 
         private Expression MatchReturn() {
-            this.Match(TokenKind.RETURN);
+            this.Match(TokenType.Return);
             var ErrRow = _enumerator.Current.row;
             var ErrCol = _enumerator.Current.column;
             if (_enumerator.MoveNext()) {
@@ -356,31 +356,31 @@ namespace Compiler {
 
         private List<Expression> MatchArgs() {
             var res = new List<Expression>();
-            this.Match(TokenKind.LPAR);
+            this.Match(TokenType.OpenBracket);
             while (_enumerator.MoveNext()) {
-                switch (_enumerator.Current.Kind) {
-                    case TokenKind.NAME:
-                    case TokenKind.INT:
+                switch (_enumerator.Current.Type) {
+                    case TokenType.Identifier:
+                    case TokenType.IntegerNumber:
                         res.Add(ParseExpr());
                         //_enumerator.MoveNext();
-                        switch (_enumerator.Current.Kind) {
-                            case TokenKind.COMMA:
+                        switch (_enumerator.Current.Type) {
+                            case TokenType.Comma:
                                 break;
-                            case TokenKind.RPAR:
+                            case TokenType.CloseBracket:
                                 return res;
                             default:
                                 throw new SyntaxException(
-                                    $"Unexpected token {_enumerator.Current.Kind.ToString()} at {_enumerator.Current.row + 1}:{_enumerator.Current.column}",
+                                    $"Unexpected token {_enumerator.Current.Type.ToString()} at {_enumerator.Current.row + 1}:{_enumerator.Current.column}",
                                     _enumerator.Current.row, _enumerator.Current.column
                                 );
                         }
 
                         break;
-                    case TokenKind.RPAR:
+                    case TokenType.CloseBracket:
                         return res;
                     default:
                         throw new SyntaxException(
-                            $"Unexpected token {_enumerator.Current.Kind.ToString()} at {_enumerator.Current.row + 1}:{_enumerator.Current.column}",
+                            $"Unexpected token {_enumerator.Current.Type.ToString()} at {_enumerator.Current.row + 1}:{_enumerator.Current.column}",
                             _enumerator.Current.row, _enumerator.Current.column
                         );
                 }
@@ -391,17 +391,17 @@ namespace Compiler {
 
         private List<string> MatchDefArgs() {
             var res = new List<string>();
-            this.Match(TokenKind.LPAR);
+            this.Match(TokenType.OpenBracket);
             while (_enumerator.MoveNext()) {
-                switch (_enumerator.Current.Kind) {
-                    case TokenKind.NAME:
+                switch (_enumerator.Current.Type) {
+                    case TokenType.Identifier:
                         res.Add(_enumerator.Current.data);
                         //Console.WriteLine(res[^1].ToString());
                         _enumerator.MoveNext();
-                        switch (_enumerator.Current.Kind) {
-                            case TokenKind.COMMA:
+                        switch (_enumerator.Current.Type) {
+                            case TokenType.Comma:
                                 break;
-                            case TokenKind.RPAR:
+                            case TokenType.CloseBracket:
                                 return res;
                             default:
                                 throw new SyntaxException(
@@ -411,7 +411,7 @@ namespace Compiler {
                         }
 
                         break;
-                    case TokenKind.RPAR:
+                    case TokenType.CloseBracket:
                         return res;
                     default:
                         throw new SyntaxException(
@@ -427,13 +427,13 @@ namespace Compiler {
         private Expression ParseExpr() {
             //Console.WriteLine(_enumerator.Current.Kind.ToString() + "Expr");
             var first = ParseTerm();
-            while (MatchCurrentBool(TokenKind.MINUS)) {
-                var op = _enumerator.Current.Kind;
+            while (MatchCurrentBool(TokenType.Subtract)) {
+                var op = _enumerator.Current.Type;
                 var ErrRow = _enumerator.Current.row;
                 var ErrCol = _enumerator.Current.column;
                 if (_enumerator.MoveNext()) {
                     var second = ParseTerm();
-                    first = new BinOp(first.Row,
+                    first = new BinaryOperationExpression(first.Row,
                         first.Column,
                         op,
                         first,
@@ -442,10 +442,10 @@ namespace Compiler {
                 }
             }
 
-            if (MatchCurrentBool(TokenKind.IF) && _enumerator.MoveNext()) {
+            if (MatchCurrentBool(TokenType.IfCondition) && _enumerator.MoveNext()) {
                 var condition = ParseExpr();
 
-                MatchCurrent(TokenKind.ELSE);
+                MatchCurrent(TokenType.ElseCondition);
                 _enumerator.MoveNext();
                 var elseExpression = ParseExpr();
                 return new ConditionalExpression(first.Row,
@@ -455,11 +455,11 @@ namespace Compiler {
                     elseExpression);
             }
 
-            if (MatchCurrentBool(TokenKind.GREATER)) {
-                var op = _enumerator.Current.Kind;
+            if (MatchCurrentBool(TokenType.Greater)) {
+                var op = _enumerator.Current.Type;
                 if (_enumerator.MoveNext()) {
                     var third = ParseExpr();
-                    first = new BinOp(first.Row,
+                    first = new BinaryOperationExpression(first.Row,
                         first.Column,
                         op,
                         first,
@@ -477,16 +477,16 @@ namespace Compiler {
             //Console.WriteLine(_enumerator.Current.Kind.ToString() + "Term");
             var first = ParseFactor();
             while (_enumerator.MoveNext() &&
-                   (MatchCurrentBool(TokenKind.STAR) ||
-                    MatchCurrentBool(TokenKind.SLASH) ||
-                    MatchCurrentBool(TokenKind.NOTEQUAL)/* ||
+                   (MatchCurrentBool(TokenType.Multiply) ||
+                    MatchCurrentBool(TokenType.Divide) ||
+                    MatchCurrentBool(TokenType.NotEqual)/* ||
                     MatchCurrentBool(TokenKind.MINUS)*/)) {
-                var op = _enumerator.Current.Kind;
+                var op = _enumerator.Current.Type;
                 var errRow = _enumerator.Current.row;
                 var errCol = _enumerator.Current.column;
                 if (_enumerator.MoveNext()) {
                     var second = ParseFactor();
-                    first = new BinOp(first.Row,
+                    first = new BinaryOperationExpression(first.Row,
                         first.Column,
                         op,
                         first,
@@ -505,49 +505,49 @@ namespace Compiler {
 
         private Expression ParseFactor() {
             //Console.WriteLine(_enumerator.Current.Kind.ToString() + " Factor");
-            if (MatchCurrentBool(TokenKind.LPAR)) {
+            if (MatchCurrentBool(TokenType.OpenBracket)) {
                 if (_enumerator.MoveNext()) {
                     var expr = ParseExpr();
-                    MatchCurrent(TokenKind.RPAR);
+                    MatchCurrent(TokenType.CloseBracket);
                     return expr;
                 }
             }
 
-            if (MatchCurrentBool(TokenKind.MINUS)) {
-                var row = _enumerator.Current.row;
-                var col = _enumerator.Current.column;
-                var op = _enumerator.Current.Kind;
-                if (_enumerator.MoveNext()) {
-                    return new UnOp(row,
-                        col,
-                        op,
-                        ParseFactor());
-                }
+            // if (MatchCurrentBool(TokenKind.MINUS)) {
+            //     var row = _enumerator.Current.row;
+            //     var col = _enumerator.Current.column;
+            //     var op = _enumerator.Current.Kind;
+            //     if (_enumerator.MoveNext()) {
+            //         return new UnOp(row,
+            //             col,
+            //             op,
+            //             ParseFactor());
+            //     }
+            //
+            //     throw new SyntaxException($"Expected token", row, col);
+            // }
 
-                throw new SyntaxException($"Expected token", row, col);
-            }
-
-            if (MatchCurrentBool(TokenKind.INT)) {
+            if (MatchCurrentBool(TokenType.IntegerNumber)) {
                 return new ConstExpression(_enumerator.Current.row,
                     _enumerator.Current.column,
                     _enumerator.Current.data);
             }
 
-            if (MatchCurrentBool(TokenKind.NAME)) {
+            if (MatchCurrentBool(TokenType.Identifier)) {
                 var name = _enumerator.Current.data;
                 if (_enumerator.MoveNext() &&
-                    _enumerator.Current.Kind == TokenKind.LPAR) {
+                    _enumerator.Current.Type == TokenType.OpenBracket) {
                     _enumerator.MovePrevious();
                     var ret = new CallExpression(_enumerator.Current.row,
                         _enumerator.Current.column,
                         name, MatchArgs());
-                    if (!_currentNameSpace.HaveFunction(ret.name)) {
+                    if (!_currentNameSpace.ThereIsFuncWithName(ret.name)) {
                         throw new SyntaxException($"Name {ret.name} is not defined ", ret.Row, ret.Column);
                     }
                     
-                    if (_currentNameSpace.GetFunctionWithName(ret.name).Args.Count != ret.Args.Count) {
+                    if (_currentNameSpace.GetFuncByName(ret.name).Args.Count != ret.Args.Count) {
                         throw new SyntaxException($"Function {ret.name} called with {ret.Args.Count} args, " +
-                                                  $"but it have {_currentNameSpace.GetFunctionWithName(ret.name).Args.Count} args " +
+                                                  $"but it have {_currentNameSpace.GetFuncByName(ret.name).Args.Count} args " +
                                                   $"at {ret.Row + 1} : {ret.Column + 1}",
                             ret.Row, ret.Column);
                     }
@@ -556,7 +556,7 @@ namespace Compiler {
                 }
 
                 _enumerator.MovePrevious();
-                if (_currentNameSpace.HaveVariable(_enumerator.Current.data)) {
+                if (_currentNameSpace.varTable.ContainsKey(_enumerator.Current.data)) {
                     return new VarExpression(_enumerator.Current.row,
                         _enumerator.Current.column,
                         name);
@@ -569,11 +569,11 @@ namespace Compiler {
             }
 
             throw new SyntaxException(
-                $"Unexpected token {_enumerator.Current.Kind.ToString()} at {_enumerator.Current.row}:{_enumerator.Current.column}",
+                $"Unexpected token {_enumerator.Current.Type.ToString()} at {_enumerator.Current.row}:{_enumerator.Current.column}",
                 _enumerator.Current.row, _enumerator.Current.column);
         }
 
-        public Ast GetAst() {
+        public AstTree GetAstTree() {
             return _base;
         }
     }

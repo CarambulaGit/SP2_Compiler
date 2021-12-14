@@ -14,6 +14,7 @@ namespace Compiler {
 
         public TwoWayEnum(IEnumerator<T> enumerator)
         {
+            // todo wtf
             if (enumerator == null)
                 throw new ArgumentNullException("enumerator");
 

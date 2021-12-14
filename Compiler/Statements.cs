@@ -10,10 +10,10 @@ namespace Compiler {
     }
 
     public class ExprStatement : Statement {
-        public Expression expr { get; set; }
+        public Expression Expression { get; set; }
 
         public ExprStatement(int row, int col, Expression e) : base(row, col) {
-            expr = e;
+            Expression = e;
         }
     }
 
@@ -37,27 +37,23 @@ namespace Compiler {
     public class AssignStatement : Statement {
         public string VarName { get; set; }
 
-        public Expression VarExpr { get; set; }
+        public Expression Expression { get; set; }
 
         public AssignStatement(int row, int col, string name, Expression e) : base(row, col) {
             VarName = name;
-            VarExpr = e;
+            Expression = e;
         }
     }
-
-    public abstract class Loop : Statement {
+    
+    public class WhileLoopStatement : Statement {
         public Expression Condition { get; set; }
 
-        protected Loop(int row, int col, Expression condition) : base(row, col) {
+        public WhileLoopStatement(int row, int col, Expression condition) : base(row, col) {
             Condition = condition;
         }
     }
 
-    public class WhileLoop : Loop {
-        public WhileLoop(int row, int col, Expression condition) : base(row, col, condition) { }
-    }
-
-    public class DefStatement : Statement, IVariableTableContainer {
+    public class DefStatement : Statement, INamespace {
         public List<string> Args;
 
         public Dictionary<string, int> varTable { get; set; }
@@ -70,11 +66,6 @@ namespace Compiler {
         public Expression? Return;
 #nullable disable
 
-        public DefStatement(int row, int col) : base(row, col) {
-            Args = new List<string>();
-            this.varTable = new Dictionary<string, int>();
-            FuncList = new List<DefStatement>();
-        }
 
         public DefStatement(int row, int col, Dictionary<string, int> varTable) : base(row, col) {
             Args = new List<string>();
@@ -82,58 +73,19 @@ namespace Compiler {
             FuncList = new List<DefStatement>();
         }
 
-        public DefStatement(int row, int col, List<string> args) : base(row, col) {
-            Args = args;
-            this.varTable = new Dictionary<string, int>();
-            FuncList = new List<DefStatement>();
-        }
-
-        public bool HaveFunction(string f) {
-            return FuncList.Find(func => func.Name == f) != null;
-        }
-
-        public void AddFunction(DefStatement f) {
-            FuncList.Add(f);
-        }
-
-        public DefStatement GetFunctionWithName(string f) {
-            return FuncList.Find(func => func.Name == f) ?? throw new NullReferenceException();
-        }
-
-        public bool HaveVariable(string v) {
-            if (varTable.ContainsKey(v)) {
-                return true;
-            }
-
-            return false;
-        }
-
-        public int GetVarIndex(string s) {
-            return varTable[s];
-        }
-
-        public int GetVarLen() {
-            return varTable.Count;
-        }
-
         public void AddArg(string argName) {
             varTable[argName] = -(varTable.Count(vt => vt.Value < 0) + 2) * 4;
         }
 
         public void AddVar(string varName) {
-            if (!varTable.ContainsKey(varName)) {
-                VarCounter++;
-                MoveIndexes();
-                varTable[varName] = 4;
-            }
-        }
-
-        private void MoveIndexes(int value = 4) {
+            if (varTable.ContainsKey(varName)) return;
+            VarCounter++;
             var indexes = varTable.Keys.ToList();
-            foreach (var index in indexes) {
-                if (varTable[index] > 0) varTable[index] += 4;
-                //else varTable[index] -= 4;
+            foreach (var index in indexes.Where(index => varTable[index] > 0)) {
+                varTable[index] += 4;
             }
+
+            varTable[varName] = 4;
         }
     }
 
@@ -154,8 +106,8 @@ namespace Compiler {
         }
     }
 
-    public class Print : Statement {
+    public class PrintStatement : Statement {
         public Expression expr { get; set; }
-        public Print(int row, int col) : base(row, col) { }
+        public PrintStatement(int row, int col) : base(row, col) { }
     }
 }
