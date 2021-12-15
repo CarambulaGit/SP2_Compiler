@@ -1,19 +1,42 @@
-﻿namespace Compiler {
+﻿using System.Collections.Generic;
+using System.IO;
+using System.Text;
+
+namespace Compiler {
     class Program {
-        // todo fix path to code file
-        public static readonly string Code = System.IO.File.ReadAllText(@"C:\Study\SP_course_work\toParse.py");
-        public const string FOUR_SPACES = "    ";
-        // todo add Extensions.cs
-        private static void Main(string[] args) {
-            // todo to funcs
-            var codeWithSpaces = Code.Replace("\t", FOUR_SPACES);
-            var lexer = new Lexer(codeWithSpaces); // todo tokenizer
+        private static readonly string PythonCode = File.ReadAllText(string.Format("{0}{1}", Directory.GetParent(
+            Directory.GetCurrentDirectory()), Constants.INPUT_FILE_NAME));
+
+        private static void Lexing(string code, out List<Token> tokens) {
+            var codeWithSpaces = code.Replace("\t", Constants.FOUR_SPACES);
+            var lexer = new Lexer(codeWithSpaces);
             lexer.Tokenize();
-            lexer.PrintTokens();
-            var parser = new Parser(lexer.GetTokens());
+            tokens = lexer.Tokens;
+        }
+
+        private static void Parsing(List<Token> tokens, out AstTree astTree) {
+            var parser = new Parser(tokens);
             parser.Parse();
-            var asmCodeGenerator = new AsmCodeGenerator(parser.GetAstTree());
+            astTree = parser.AstTree;
+        }
+
+        private static void AsmCodeGenerator(AstTree astTree, out string asmCode) {
+            var asmCodeGenerator = new AsmCodeGenerator(astTree);
             asmCodeGenerator.GenerateAsm();
+            asmCode = asmCodeGenerator.AsmCode;
+        }
+
+        private static void WriteCodeToFile(string asmCode) {
+            using var fs = File.Create(Constants.OUTPUT_FILE_NAME);
+            var bytes = new UTF8Encoding(true).GetBytes(asmCode);
+            fs.Write(bytes, 0, bytes.Length);
+        }
+
+        private static void Main(string[] args) {
+            Lexing(PythonCode, out var tokens);
+            Parsing(tokens, out var astTree);
+            AsmCodeGenerator(astTree, out var asmCode);
+            WriteCodeToFile(asmCode);
         }
     }
 }

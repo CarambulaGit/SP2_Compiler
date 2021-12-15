@@ -1,34 +1,23 @@
 ﻿using System.Collections.Generic;
 
 namespace Compiler {
-    // todo move to Lexer
-    
     // todo mb struct
     public class Token {
-        //todo constructor
-        // todo remove toStr?
-        public override string ToString() {
-            if (data != null) {
-                return $"Kind is {Type.ToString()}\n" +
-                       $"data is {data.ToString()}\n" +
-                       $"row is {row.ToString()}\n" +
-                       $"column is {column.ToString()}\n";
-            }
-            else {
-                return $"Kind is {Type.ToString()}\n" +
-                       $"row is {row.ToString()}\n" +
-                       $"column is {column.ToString()}\n";
-            }
-        }
-
         public TokenType Type { get; set; }
 
-        public dynamic data { get; set; }
+        public string Data { get; set; }
 
         // todo class Position
-        public int row { get; set; }
+        public int Row { get; set; }
 
-        public int column { get; set; }
+        public int Column { get; set; }
+
+        public Token(TokenType type, string data, int row, int column) {
+            Type = type;
+            Data = data;
+            Row = row;
+            Column = column;
+        }
     }
 }
 
@@ -47,6 +36,7 @@ namespace Compiler {
 // } 		– 	close brace
 
 public enum TokenType {
+    NotImplemented, // todo remove
     FuncDefinition,
     Identifier,
     OpenBracket,
@@ -68,5 +58,4 @@ public enum TokenType {
     Comma,
     PrintOperator,
     IntegerNumber,
-    OP, // todo remove
 }

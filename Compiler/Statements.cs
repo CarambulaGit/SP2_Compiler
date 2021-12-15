@@ -4,110 +4,96 @@ using System.Linq;
 
 namespace Compiler {
     public abstract class Statement : AstNode {
-        public string Name { get; set; }
-
         protected Statement(int row, int col) : base(row, col) { }
+        public string Name { get; set; }
     }
 
-    public class ExprStatement : Statement {
+    public abstract class StatementWithExpression : Statement {
         public Expression Expression { get; set; }
 
-        public ExprStatement(int row, int col, Expression e) : base(row, col) {
-            Expression = e;
+        protected StatementWithExpression(int row, int col, Expression expression) : base(row, col) {
+            Expression = expression;
         }
     }
 
-    public class ConditionalStatement : Statement {
-        public Expression Condition { get; set; }
-
-        public ConditionalStatement(int row, int col,
-            Expression condition) : base(row, col) {
-            Condition = condition;
+    public class ExpressionStatement : StatementWithExpression {
+        public ExpressionStatement(int row, int col, Expression expression) : base(row, col, expression) {
         }
     }
 
-    public class ConditionalElseStatement : ConditionalStatement {
-        public ConditionalElseStatement(int row, int col, Expression condition) : base(row, col, condition) { }
+    public class IfStatement : StatementWithExpression {
+        public Expression Condition => Expression;
+
+        public IfStatement(int row, int col,
+            Expression condition) : base(row, col, condition) {
+        }
     }
 
-    class BlockStatement : Statement {
+    public class ElseStatement : StatementWithExpression {
+        public Expression Condition => Expression;
+
+        public ElseStatement(int row, int col, Expression condition) : base(row, col, condition) {
+            
+        }
+    }
+
+    internal class BlockStatement : Statement {
         public BlockStatement(int row, int col) : base(row, col) { }
     }
 
-    public class AssignStatement : Statement {
+    public class AssignStatement : StatementWithExpression {
         public string VarName { get; set; }
-
-        public Expression Expression { get; set; }
-
-        public AssignStatement(int row, int col, string name, Expression e) : base(row, col) {
+        
+        public AssignStatement(int row, int col, string name, Expression e) : base(row, col, e) {
             VarName = name;
-            Expression = e;
         }
     }
     
-    public class WhileLoopStatement : Statement {
-        public Expression Condition { get; set; }
+    public class WhileLoopStatement : StatementWithExpression {
+        public Expression Condition => Expression;
 
-        public WhileLoopStatement(int row, int col, Expression condition) : base(row, col) {
-            Condition = condition;
-        }
+        public WhileLoopStatement(int row, int col, Expression condition) : base(row, col, condition) { }
     }
 
-    public class DefStatement : Statement, INamespace {
+    public class FuncStatement : Statement, INamespace {
         public List<string> Args;
 
-        public Dictionary<string, int> varTable { get; set; }
+        public Dictionary<string, int> Variables { get; set; }
 
-        public List<DefStatement> FuncList { get; set; }
+        public List<FuncStatement> FuncList { get; set; }
 
         public int VarCounter { get; set; }
 
-#nullable enable
         public Expression? Return;
-#nullable disable
 
-
-        public DefStatement(int row, int col, Dictionary<string, int> varTable) : base(row, col) {
+        public FuncStatement(int row, int col, Dictionary<string, int> varTable) : base(row, col) {
             Args = new List<string>();
-            this.varTable = varTable;
-            FuncList = new List<DefStatement>();
+            this.Variables = varTable;
+            FuncList = new List<FuncStatement>();
         }
 
         public void AddArg(string argName) {
-            varTable[argName] = -(varTable.Count(vt => vt.Value < 0) + 2) * 4;
+            Variables[argName] = -(Variables.Count(vt => vt.Value < 0) + 2) * 4;
         }
 
-        public void AddVar(string varName) {
-            if (varTable.ContainsKey(varName)) return;
+        public void AddVariable(string varName) {
+            if (Variables.ContainsKey(varName)) return;
             VarCounter++;
-            var indexes = varTable.Keys.ToList();
-            foreach (var index in indexes.Where(index => varTable[index] > 0)) {
-                varTable[index] += 4;
+            var indexes = Variables.Keys.ToList();
+            foreach (var index in indexes.Where(index => Variables[index] > 0)) {
+                Variables[index] += 4;
             }
 
-            varTable[varName] = 4;
+            Variables[varName] = 4;
         }
     }
-
-    public class CallStatement : Statement {
-        public List<Expression> Args;
-
-        public CallStatement(int row, int col) : base(row, col) {
-            Args = new List<Expression>();
-        }
+    
+    public class ReturnStatement : StatementWithExpression {
+        public Expression Return => Expression;
+        public ReturnStatement(int row, int col, Expression returnExpression) : base(row, col, returnExpression) { }
     }
 
-    public class ReturnStatement : Statement {
-        public Expression Expr { get; set; }
-        public ReturnStatement(int row, int col) : base(row, col) { }
-
-        public ReturnStatement(int row, int col, Expression ret) : base(row, col) {
-            Expr = ret;
-        }
-    }
-
-    public class PrintStatement : Statement {
-        public Expression expr { get; set; }
-        public PrintStatement(int row, int col) : base(row, col) { }
+    public class PrintStatement : StatementWithExpression {
+        public PrintStatement(int row, int col, Expression expression) : base(row, col, expression) { }
     }
 }

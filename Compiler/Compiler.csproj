@@ -5,10 +5,4 @@
         <TargetFramework>net5.0</TargetFramework>
     </PropertyGroup>
 
-    <ItemGroup>
-      <Content Include="..\toParse.py">
-        <Link>toParse.py</Link>
-      </Content>
-    </ItemGroup>
-
 </Project>

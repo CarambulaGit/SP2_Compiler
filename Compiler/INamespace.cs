@@ -3,30 +3,27 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace Compiler {
-    // todo abstract class namespace?
     public interface INamespace {
-        // todo make varTable List<string>
-        Dictionary<string, int> varTable { get; set; }
+        Dictionary<string, int> Variables { get; set; }
 
-        List<DefStatement> FuncList { get; set; }
+        List<FuncStatement> FuncList { get; set; }
         
         public int VarCounter { get; set; }
 
-        public bool ThereIsFuncWithName(string f) => FuncList.Any(func => func.Name == f);
-
-        // todo there is no func with this name
-        public DefStatement GetFuncByName(string f) =>
-            FuncList.Find(func => func.Name == f) ?? throw new NullReferenceException();
-
-        public void AddVar(string varName) {
-            if (varTable.ContainsKey(varName)) return;
+        public void AddVariable(string varName) {
+            if (Variables.ContainsKey(varName)) return;
             VarCounter++;
-            var indexes = varTable.Keys.ToList();
-            foreach (var index in indexes.Where(index => varTable[index] > 0)) {
-                varTable[index] += 4;
+            var indexes = Variables.Keys.ToList();
+            foreach (var index in indexes.Where(index => Variables[index] > 0)) {
+                Variables[index] += 4;
             }
 
-            varTable[varName] = 4;
+            Variables[varName] = 4;
         }
+        
+        public FuncStatement GetFuncByName(string f) =>
+            FuncList.Find(func => func.Name == f) ?? throw new SyntaxException($"Function {f} not found");
+
+        public bool ThereIsFuncWithName(string f) => FuncList.Any(func => func.Name == f);
     }
 }

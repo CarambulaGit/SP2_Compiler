@@ -6,296 +6,219 @@ using System.Text;
 using Compiler;
 
 public class AsmCodeGenerator {
-    private readonly AstTree _base;
-
+    private const string ModuleName = "name";
+    private readonly AstTree _root;
     private INamespace _currentNameSpace;
-
-    private List<string> _functionProtoNames;
-
-    private List<string> _functions;
-
-    private List<string> _statements;
-
-    private string _currModule = "MyModule";
     private int _currentFreeId;
+    private readonly List<string> _functions;
+    private readonly List<string> _functionProtoNames;
+    public string AsmCode { get; private set; }
 
-    private static readonly Dictionary<Type, string> TemplateDict = new Dictionary<Type, string>() {
-        {typeof(CallStatement), "call {0}\n"},
-        {typeof(AssignStatement), "{0}\n\tpop eax\n\tmov dword ptr[ebp{1}], eax\n"},
-        {typeof(ExprStatement), "{0}\n"}, {
-            typeof(ConditionalElseStatement), "{0}" +
-                                              "pop eax\n" +
-                                              "cmp eax, 0\n" +
-                                              "je {1}else\n" +
-                                              "{2}" +
-                                              "jmp {1}final\n" +
-                                              "{1}else:\n" +
-                                              "{3}" +
-                                              "{1}final:\n"
-        }, {
-            typeof(ConditionalStatement), "{0}" +
-                                          "pop eax\n" +
-                                          "cmp eax, 0\n" +
-                                          "je {1}else\n" +
-                                          "{2}" +
-                                          "{1}else:\n"
-        }, {
-            typeof(WhileLoopStatement), "Loop{0}start:\n" +
-                               "{1}" +
-                               "pop eax\n" +
-                               "cmp eax, 0\n" +
-                               "je Loop{0}end\n" +
-                               "{2}" +
-                               "jmp Loop{0}start\n" +
-                               "Loop{0}end:\n"
-        },
-        // {typeof(Print), "{0}printf(str$(eax))\nprintf(\"\\n\")\n"}
-        {typeof(PrintStatement), "{0}fn MessageBoxA,0, str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n"}
+    private static readonly Dictionary<Type, string> StatementCodeDict = new Dictionary<Type, string>() {
+        {typeof(PrintStatement), Constants.PRINT_STATEMENT_ASM},
+        {typeof(AssignStatement), Constants.ASSIGN_STATEMENT_ASM},
+        {typeof(ExpressionStatement), Constants.EXPRESSION_STATEMENT_ASM},
+        {typeof(IfStatement), Constants.IF_STATEMENT_ASM},
+        {typeof(ElseStatement), Constants.ELSE_STATEMENT_ASM},
+        {typeof(WhileLoopStatement), Constants.WHILE_STATEMENT_ASM},
     };
 
-    private const string ProcTemplate = "{0} PROC\n" +
-                                        "{1}\n" +
-                                        "{0} ENDP\n";
+    private readonly List<string> _statementsList;
 
-    private const string ProtoTemplate = "{0} PROTO\n";
+    private const string ProcedureTemplate = Constants.PROCEDURE_ASM;
 
-    private string _templateMasm = ".386\n" +
-                                   ".model flat,stdcall\n" +
-                                   "option casemap:none\n\n" +
-                                   @"include \masm32\include\masm32rt.inc" + "\n" +
-                                   "_main        PROTO\n\n" +
-                                   "{0}\n" + // insert prototype of functions
-                                   ".data\n" +
-                                   ".code\n" +
-                                   "_start:\n" +
-                                   "push ebp\n" +
-                                   "mov ebp, esp\n" +
-                                   "sub esp, {3}\n" +
-                                   "invoke  _main\n" +
-                                   "add esp, {3}\n" +
-                                   "mov esp, ebp\n" +
-                                   "pop ebp\n" +
-                                   "ret\n" +
-                                   "_main PROC\n\n" +
-                                   "\n" +
-                                   "{1}" + // insert code
-                                   "\n" +
-                                   // "fn MessageBoxA,0,str$(eax), \"Didenko Vladyslav IO-91\", MB_OK\n" +
-                                   "printf(\"\\n\")\n" +
-                                   "inkey\n" +
-                                   "\nret\n\n" +
-                                   "_main ENDP\n\n" +
-                                   "{2}" + // insert functions
-                                   "END _start\n";
+    private const string ProtoTemplate = Constants.PROTO_ASM;
 
-    public AsmCodeGenerator(AstTree Base) {
-        _base = Base;
-        _functions = new List<string>();
-        _statements = new List<string>();
+    private const string MasmCodeTemplate = Constants.MASM_CODE_TEMPLATE;
+
+    public AsmCodeGenerator(AstTree root) {
         _functionProtoNames = new List<string>();
-        _currentNameSpace = Base;
+        _statementsList = new List<string>();
+        _functions = new List<string>();
+        _root = root;
+        _currentNameSpace = root;
     }
 
     public void GenerateAsm() {
-        foreach (var child in _base.Root.GetChildren()) {
-            _statements.Add(GenerateCode(child));
+        foreach (var child in _root.Root.GetChildren()) {
+            _statementsList.Add(GenerateCode(child));
         }
 
-        using (var fs = File.Create(
-            "output.asm")) {
-            var info = new UTF8Encoding(true).GetBytes(
-                string.Format(_templateMasm, string.Join("", _functionProtoNames.ToArray()),
-                    string.Join("", _statements.ToArray()),
-                    string.Join("", _functions.ToArray()),
-                    (_currentNameSpace.varTable.Count * 4).ToString()));
-            fs.Write(info, 0, info.Length);
-        }
+
+        AsmCode = string.Format(MasmCodeTemplate, string.Join("", _functionProtoNames.ToArray()),
+            string.Join("", _statementsList.ToArray()),
+            string.Join("", _functions.ToArray()),
+            (_currentNameSpace.Variables.Count * 4).ToString());
     }
 
-    private string GenerateFunction(DefStatement defStatement) {
+    private string GenerateFunction(FuncStatement funcStatement) {
         var oldNameSpace = _currentNameSpace;
-        _currentNameSpace = defStatement;
-        var bodystatements = new StringBuilder();
-        bodystatements.Append($"push ebp\nmov ebp, esp\nsub esp, {defStatement.VarCounter * 4}\n");
+        _currentNameSpace = funcStatement;
+        var bodyStatements = new StringBuilder();
+        bodyStatements.Append(string.Format(Constants.VARIABLE_ASM, funcStatement.VarCounter * 4));
 
-        foreach (var statement in defStatement.GetChildren()) {
-            //Console.WriteLine(statement.GetType() + statement.Row.ToString() + ':' + statement.Column.ToString());
-            bodystatements.Append(GenerateCode(statement));
-            bodystatements.Append('\n');
+        foreach (var statement in funcStatement.GetChildren()) {
+            bodyStatements.Append(GenerateCode(statement));
+            bodyStatements.Append('\n');
         }
 
-        bodystatements.Append($"add esp, {defStatement.VarCounter * 4}\nmov esp, ebp\npop ebp\n");
+        bodyStatements.Append(string.Format(Constants.FUNCTION_BODY_PARAMS_ASM, funcStatement.VarCounter * 4));
 
-        bodystatements.Append($"ret {defStatement.Args.Count * 4}\n");
+        bodyStatements.Append(string.Format(Constants.FUNCTION_BODY_ARGUMENTS_ASM, funcStatement.Args.Count * 4));
 
         _currentNameSpace = oldNameSpace;
-        _functionProtoNames.Add(string.Format(ProtoTemplate, defStatement.Name));
+        _functionProtoNames.Add(string.Format(ProtoTemplate, funcStatement.Name));
 
-        _functions.Add(string.Format(ProcTemplate, defStatement.Name, bodystatements.ToString()));
+        _functions.Add(string.Format(ProcedureTemplate, funcStatement.Name, bodyStatements));
         return "\n";
     }
 
     private string GenerateWhileLoop(WhileLoopStatement whileLoopStatement) {
         var id = GenerateId();
-        //Console.WriteLine(GenerateExpr(whileLoop.Condition));
-        var ret = string.Format(TemplateDict[whileLoopStatement.GetType()], id,
+        var ret = string.Format(StatementCodeDict[whileLoopStatement.GetType()], id,
             GenerateExpr(whileLoopStatement.Condition),
             GenerateCode(whileLoopStatement.GetChildren()[0]));
         return ret;
     }
 
-    private string GenerateBinExpr(BinaryOperationExpression e) {
-        string code;
-        var a = GenerateExpr(e.LeftExpression);
-        var b = GenerateExpr(e.RightExpression);
-        if (e.Op == TokenType.Subtract) {
-            code = $"{b}\n{a}\npop eax\npop ecx\nsub eax, ecx\npush eax\n";
-        }
-        else if (e.Op == TokenType.Multiply) {
-            code = $"{b}\n{a}\npop eax\npop ecx\nimul ecx\npush eax\n";
-        }
-        else if (e.Op == TokenType.Divide) {
-            code = $"{b}\n{a}\npop eax\npop ebx\nxor edx, edx\ndiv ebx\npush eax\n";
-        }
-        else if (e.Op == TokenType.NotEqual) {
-            code = $"{b}\n{a}\npop eax\npop ecx\ncmp eax, ecx\nmov eax, 0\nsetne al\npush eax\n";
-        }
-        else if (e.Op == TokenType.Greater) {
-            code = $"{b}\n{a}\npop eax\npop ecx\ncmp ecx, eax\nmov eax, 0\nsetl al\npush eax\n";
-        }
-        else {
-            throw new CompilerException($"Sorry, but {e.Op.ToString()} not implemented yet");
-        }
+    private string GenerateBinExpr(BinaryOperationExpression expression) {
+        var left = GenerateExpr(expression.Left);
+        var right = GenerateExpr(expression.Right);
+        var operation = expression.Operation switch {
+            TokenType.Subtract => string.Format(Constants.SUBSTRACT_ASM, right, left),
+            TokenType.Multiply => string.Format(Constants.MULTIPLY_ASM, right, left),
+            TokenType.Divide => string.Format(Constants.DIVIDE_ASM, right, left),
+            TokenType.NotEqual => string.Format(Constants.NOT_EQUAL_ASM, right, left),
+            TokenType.Greater => string.Format(Constants.GREATER_ASM, right, left),
+            _ => throw new CompilerException($"{expression.Operation.ToString()} not implemented yet")
+        };
 
-        //Console.WriteLine(code);
-        return code;
+        return operation;
     }
 
-    // private string GenerateUnExpr(UnOp e) {
-    //     string code = "";
-    //     var expr = GenerateExpr(e.Expression);
-    //     if (e.Op == TokenKind.MINUS) {
-    //         code = expr + $"\npop eax\nneg eax\npush eax\n";
-    //     }
-    //     else {
-    //         throw new CompilerException($"Sorry, but {e.Op.ToString()} not implemented yet");
-    //     }
-    //
-    //     return code;
-    // }
-
-    private string GenerateConstExpr(ConstExpression e) {
-        return $"\tpush {e.Data}\n";
+    private string GenerateConstExpr(ConstExpression expression) {
+        return string.Format(Constants.CONST_ASM, (object?) expression.Data);
     }
 
-    private string GenerateVarExpr(VarExpression e) {
-        return $"mov eax, dword ptr[ebp{GetVarOffset(e.varName)}] ; {e.varName}\n" +
-               $"push eax\n";
+    private string GenerateVarExpr(VarExpression expression) {
+        return string.Format(Constants.VAR_EXPRESSION_ASM, GetVarOffset(expression.VarName), expression.VarName);
     }
 
-    private string GenerateReturn(Expression ret) {
-        var func = (DefStatement) _currentNameSpace;
-        return
-            $"{GenerateExpr(ret)}\npop eax\nadd esp, {func.VarCounter * 4}\nmov esp, ebp\npop ebp\nret {func.Args.Count * 4}\n";
+    private string GenerateReturn(Expression returnExpression) {
+        return string.Format(Constants.RETURN_ASM, GenerateExpr(returnExpression),
+            ((FuncStatement) _currentNameSpace).VarCounter * 4, ((FuncStatement) _currentNameSpace).Args.Count * 4);
     }
 
-    private string GenerateCallExpression(CallExpression e) {
-        var st = new StringBuilder();
-        e.Args.Reverse();
-        if (e.Args.Count > 0) {
-            foreach (var arg in e.Args) {
-                st.Append(GenerateExpr(arg));
+    private string GenerateCallExpression(CallExpression callExpression) {
+        var stringBuilder = new StringBuilder();
+        callExpression.Args.Reverse();
+        if (callExpression.Args.Count > 0) {
+            for (var i = 0; i < callExpression.Args.Count; i++) {
+                var arg = callExpression.Args[i];
+                stringBuilder.Append(GenerateExpr(arg));
             }
         }
 
-        st.Append($"invoke {e.name}\n push eax\n");
-        return st.ToString();
+        stringBuilder.Append(string.Format(Constants.CALL_EXPRESSION_ASM, callExpression.Name));
+        return stringBuilder.ToString();
     }
 
-    private string GenerateConditionalExpression(ConditionalExpression e) {
+    private string GenerateConditionalExpression(ConditionalExpression conditionalExpression) {
         var currId = GenerateId();
-        if (e.elseBody != null) {
-            return $"{GenerateExpr(e.condition)}\npop eax\ncmp eax, 0\nje {currId}else\n" +
-                   $"{GenerateExpr(e.body)}\njmp {currId}final\n" +
-                   $"{currId}else:\n{GenerateExpr(e.elseBody)}\n" +
-                   $"{currId}final:\n";
+        if (conditionalExpression.ElseBody != null) {
+            return string.Format("{0}{1}{2}{3}",
+                string.Format(Constants.CONDITION_IF_WITH_ELSE_ASM, GenerateExpr(conditionalExpression.Condition), currId),
+                string.Format(Constants.CONDITION_BODY_ASM, GenerateExpr(conditionalExpression.Body), currId),
+                string.Format(Constants.CONDITION_ELSE_ASM, currId, GenerateExpr(conditionalExpression.ElseBody)),
+                string.Format(Constants.ID_ASM, currId));
         }
 
-        return $"{GenerateExpr(e.condition)}\npop eax\ncmp eax, 0\nje {currId}final\n" +
-               $"{GenerateExpr(e.body)}\n" +
-               $"{currId}final:\n";
+        return string.Format(Constants.CONDITION_IF_ASM, GenerateExpr(conditionalExpression.Condition), currId) +
+               $"{GenerateExpr(conditionalExpression.Body)}\n" +
+               string.Format(Constants.ID_ASM, currId);
     }
 
-    private string GenerateExpr(Expression e) {
-        return e switch {
-            BinaryOperationExpression binop => GenerateBinExpr(binop),
-            // UnOp unop => GenerateUnExpr(unop),
-            ConstExpression constExpression => GenerateConstExpr(constExpression), // todo remove?
+    private string GenerateExpr(Expression expression) {
+        return expression switch {
+            BinaryOperationExpression binaryOperationExpression => GenerateBinExpr(binaryOperationExpression),
+            ConstExpression constExpression => GenerateConstExpr(constExpression),
             VarExpression varExpression => GenerateVarExpr(varExpression),
             CallExpression callExpression => GenerateCallExpression(callExpression),
             ConditionalExpression conditionalExpression => GenerateConditionalExpression(conditionalExpression),
-            _ => throw new CompilerException($"{e.GetType()} at row = {e.Row} column = {e.Column}")
+            _ => throw new CompilerException(
+                $"{expression.GetType()} at row = {expression.Row} column = {expression.Column}")
         };
     }
 
     private string GenerateId() {
-        return $"{_currModule}{_currentFreeId++}";
+        return $"{ModuleName}{_currentFreeId++}";
     }
 
     private string GetVarOffset(string varName) {
-        // todo remove?
-        return _currentNameSpace.varTable[varName] < 0 ? $"+{-_currentNameSpace.varTable[varName]}" : $"-{_currentNameSpace.varTable[varName]}";
+        return _currentNameSpace.Variables[varName] < 0
+            ? $"+{-_currentNameSpace.Variables[varName]}"
+            : $"-{_currentNameSpace.Variables[varName]}";
     }
 
-    private string TrimPush(string s) {
-        if (s.EndsWith("push eax\n")) {
-            return s.Substring(0, s.IndexOf("push eax\n", StringComparison.Ordinal));
-        }
-
-        return s;
-    }
+    private string TrimPush(string s) => s.EndsWith("push eax\n") ? s[..s.IndexOf("push eax\n", StringComparison.Ordinal)] : s;
 
     private string GenerateCode(AstNode st) {
-        //Console.WriteLine(st.GetType());
         return st switch {
-            CallStatement callStatement => string.Format(TemplateDict[st.GetType()],
-                callStatement.Name),
-            BlockStatement blockStatement =>
-                string.Join('\n',
-                    blockStatement.GetChildren()
-                        .Select(c => GenerateCode(c) + '\n').ToArray()),
-            //blockStatement.GetChildren().S,
             AssignStatement assignStatement =>
-                string.Format(TemplateDict[assignStatement.GetType()],
-                    GenerateExpr(assignStatement.Expression),
-                    GetVarOffset(assignStatement.VarName)),
-            ExprStatement exprStatement =>
-                string.Format(TemplateDict[exprStatement.GetType()],
-                    TrimPush(GenerateExpr(exprStatement.Expression))),
-            ConditionalElseStatement conditionalElseStatement =>
-                string.Format(TemplateDict[conditionalElseStatement.GetType()],
-                    GenerateExpr(conditionalElseStatement.Condition),
-                    GenerateId(),
-                    GenerateCode(conditionalElseStatement.GetChildren()[0]),
-                    GenerateCode(conditionalElseStatement.GetChildren()[1])
-                ),
-            ConditionalStatement conditionalStatement =>
-                string.Format(TemplateDict[conditionalStatement.GetType()],
-                    GenerateExpr(conditionalStatement.Condition),
-                    GenerateId(),
-                    GenerateCode(conditionalStatement.GetChildren()[0])),
+                GenerateAssigStatement(assignStatement),
+            BlockStatement blockStatement =>
+                GenerateBlockStatement(blockStatement),
             WhileLoopStatement whileLoop =>
                 GenerateWhileLoop(whileLoop),
-            DefStatement defStatement =>
-                GenerateFunction(defStatement),
+            ExpressionStatement expressionStatement =>
+                GenerateExpressionStatement(expressionStatement),
+            ElseStatement elseStatement =>
+                GenerateElseStatement(elseStatement),
+            IfStatement ifStatement =>
+                GenerateIfStatement(ifStatement),
+            FuncStatement funcStatement =>
+                GenerateFunction(funcStatement),
             ReturnStatement returnStatement =>
-                GenerateReturn(returnStatement.Expr),
+                GenerateReturn(returnStatement.Return),
             PrintStatement print =>
-                string.Format(TemplateDict[print.GetType()],
-                    TrimPush(GenerateExpr(print.expr))),
+                string.Format(StatementCodeDict[print.GetType()],
+                    TrimPush(GenerateExpr(print.Expression))),
             _ => throw new CompilerException(
-                $"Ooops, unknown type, seems like this feature is in development {st.GetType()}" +
+                $"Unknown type: {st.GetType()}" +
                 $" {st.Row + 1}:{st.Column + 1}")
         } ?? throw new Exception();
+    }
+
+    private string GenerateIfStatement(IfStatement ifStatement) {
+        return string.Format(StatementCodeDict[ifStatement.GetType()],
+            GenerateExpr(ifStatement.Condition),
+            GenerateId(),
+            GenerateCode(ifStatement.GetChildren()[0]));
+    }
+
+    private string GenerateElseStatement(ElseStatement elseStatement) {
+        return string.Format(StatementCodeDict[elseStatement.GetType()],
+            GenerateExpr(elseStatement.Condition),
+            GenerateId(),
+            GenerateCode(elseStatement.GetChildren()[0]),
+            GenerateCode(elseStatement.GetChildren()[1])
+        );
+    }
+
+    private string GenerateExpressionStatement(ExpressionStatement exprStatement) {
+        return string.Format(StatementCodeDict[exprStatement.GetType()],
+            TrimPush(GenerateExpr(exprStatement.Expression)));
+    }
+
+    private string GenerateBlockStatement(BlockStatement blockStatement) {
+        return string.Join('\n',
+            blockStatement.GetChildren()
+                .Select(c => GenerateCode(c) + '\n').ToArray());
+    }
+
+    private string GenerateAssigStatement(AssignStatement assignStatement) {
+        return string.Format(StatementCodeDict[assignStatement.GetType()],
+            GenerateExpr(assignStatement.Expression),
+            GetVarOffset(assignStatement.VarName));
     }
 }
