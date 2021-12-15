@@ -1,21 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 
 namespace Compiler {
     public class Parser {
-        private readonly List<Token> _tokens;
         private readonly MyEnumerator<Token> _tokensEnumerator;
         public AstTree AstTree { get; private set; }
 
         private INamespace _currentNameSpace;
 
         public Parser(List<Token> tokens) {
-            _tokens = tokens;
             AstTree = new AstTree();
-            _tokensEnumerator = new MyEnumerator<Token>(_tokens.GetEnumerator());
+            _tokensEnumerator = new MyEnumerator<Token>(tokens.GetEnumerator());
             _currentNameSpace = AstTree;
+        }
+
+        public void Parse() {
+            ParseUntil(AstTree.Root);
         }
 
         private Statement ParseWhileLoop() {
@@ -25,9 +26,9 @@ namespace Compiler {
                 token.Column, ParseExpr());
             SameCurrent(TokenType.Colon);
             if (!_tokensEnumerator.MoveNext()) {
-                _tokensEnumerator.MovePrevious();
+                _tokensEnumerator.MovePrev();
                 if (_tokensEnumerator.Current != null)
-                    throw new CompilerException(
+                    throw new ParserException(
                         $"Expected token {_tokensEnumerator.Current} at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column}");
             }
 
@@ -35,7 +36,7 @@ namespace Compiler {
             var body = new BlockStatement(_tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
             if (SameToCurrentBool(TokenType.Newline)) {
                 Same(TokenType.Indent);
-                _tokensEnumerator.MovePrevious();
+                _tokensEnumerator.MovePrev();
                 ParseUntil(body, TokenType.Dedent);
             }
             else {
@@ -52,7 +53,7 @@ namespace Compiler {
                 row = _tokensEnumerator.Current.Row, column = _tokensEnumerator.Current.Column
             };
             if (!_tokensEnumerator.MoveNext()) {
-                throw new SyntaxException("Token expected",
+                throw new ParserException("Token expected",
                     rowCol.row, rowCol.column);
             }
 
@@ -64,11 +65,11 @@ namespace Compiler {
 
             if (!_tokensEnumerator.MoveNext())
                 if (_tokensEnumerator.Current != null)
-                    throw new SyntaxException("Token expected",
+                    throw new ParserException("Token expected",
                         _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
 
             Same(TokenType.Indent);
-            _tokensEnumerator.MovePrevious();
+            _tokensEnumerator.MovePrev();
             ParseUntil(body,
                 _tokensEnumerator.Current is {Type: TokenType.Newline} ? TokenType.Dedent : TokenType.Newline);
 
@@ -82,11 +83,11 @@ namespace Compiler {
                     _tokensEnumerator.Current.Column);
                 if (!_tokensEnumerator.MoveNext())
                     if (_tokensEnumerator.Current != null)
-                        throw new SyntaxException("Token expected",
+                        throw new ParserException("Token expected",
                             _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
                 _tokensEnumerator.MoveNext();
                 Same(TokenType.Indent);
-                _tokensEnumerator.MovePrevious();
+                _tokensEnumerator.MovePrev();
                 ParseUntil(elseBody,
                     _tokensEnumerator.Current is {Type: TokenType.Newline} ? TokenType.Dedent : TokenType.Newline);
                 conditionalElseStatement.AddChild(body);
@@ -120,7 +121,7 @@ namespace Compiler {
                                 case TokenType.CloseBracket:
                                     return res;
                                 default:
-                                    throw new SyntaxException(
+                                    throw new ParserException(
                                         $"Unexpected token {_tokensEnumerator.Current.Type.ToString()} at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column}",
                                         _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column
                                     );
@@ -130,7 +131,7 @@ namespace Compiler {
                         case TokenType.CloseBracket:
                             return res;
                         default:
-                            throw new SyntaxException(
+                            throw new ParserException(
                                 $"Unexpected token {_tokensEnumerator.Current.Type.ToString()} at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column}",
                                 _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column
                             );
@@ -231,7 +232,7 @@ namespace Compiler {
                     first = new BinaryOperationExpression(first.Row, first.Column, termOperator, first, second);
                 }
                 else {
-                    throw new SyntaxException($"Expected token", errorRow, errorCol);
+                    throw new ParserException($"Expected token", errorRow, errorCol);
                 }
             }
 
@@ -257,29 +258,29 @@ namespace Compiler {
 
             if (!SameToCurrentBool(TokenType.Identifier))
                 if (_tokensEnumerator.Current != null)
-                    throw new SyntaxException(
+                    throw new ParserException(
                         $"Unexpected token {_tokensEnumerator.Current.Type.ToString()} at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column}",
                         _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
             if (_tokensEnumerator.Current == null)
                 if (_tokensEnumerator.Current != null)
-                    throw new SyntaxException($"Variable used before assignment " +
+                    throw new ParserException($"Variable used before assignment " +
                                               $"\"{_tokensEnumerator.Current.Data.ToString()}\" " +
                                               $"at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column}",
                         _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
             var name = _tokensEnumerator.Current.Data;
             if (_tokensEnumerator.Current != null && _tokensEnumerator.MoveNext() &&
                 _tokensEnumerator.Current is {Type: TokenType.OpenBracket}) {
-                _tokensEnumerator.MovePrevious();
+                _tokensEnumerator.MovePrev();
                 if (_tokensEnumerator.Current != null) {
                     var ret = new CallExpression(_tokensEnumerator.Current.Row,
                         _tokensEnumerator.Current.Column,
                         name, CheckArguments());
                     if (!_currentNameSpace.ThereIsFuncWithName(ret.Name)) {
-                        throw new SyntaxException($"Name {ret.Name} is not defined ", ret.Row, ret.Column);
+                        throw new ParserException($"Name {ret.Name} is not defined ", ret.Row, ret.Column);
                     }
 
                     if (_currentNameSpace.GetFuncByName(ret.Name).Args.Count != ret.Args.Count) {
-                        throw new SyntaxException($"Function {ret.Name} called with {ret.Args.Count} args, " +
+                        throw new ParserException($"Function {ret.Name} called with {ret.Args.Count} args, " +
                                                   $"but it have {_currentNameSpace.GetFuncByName(ret.Name).Args.Count} args " +
                                                   $"at {ret.Row + 1} : {ret.Column + 1}",
                             ret.Row, ret.Column);
@@ -289,7 +290,7 @@ namespace Compiler {
                 }
             }
 
-            _tokensEnumerator.MovePrevious();
+            _tokensEnumerator.MovePrev();
             if (_tokensEnumerator.Current != null &&
                 _currentNameSpace.Variables.ContainsKey(_tokensEnumerator.Current.Data)) {
                 return new VarExpression(_tokensEnumerator.Current.Row,
@@ -297,16 +298,16 @@ namespace Compiler {
                     name);
             }
 
-            throw new SyntaxException($"Variable used before assignment " +
+            throw new ParserException($"Variable used before assignment " +
                                       $"\"{_tokensEnumerator.Current.Data.ToString()}\" " +
                                       $"at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column}",
                 _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
         }
 
         private Token Same(TokenType tokenType) {
-            if (!_tokensEnumerator.MoveNext()) throw new SyntaxException();
+            if (!_tokensEnumerator.MoveNext()) throw new ParserException();
             if (_tokensEnumerator.Current != null && tokenType != _tokensEnumerator.Current.Type) {
-                throw new SyntaxException("Got " + _tokensEnumerator.Current.Type +
+                throw new ParserException("Got " + _tokensEnumerator.Current.Type +
                                           $", {tokenType.ToString()} expected" +
                                           $" at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column + 1}",
                     _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
@@ -317,7 +318,7 @@ namespace Compiler {
 
         private void SameCurrent(TokenType tokenType) {
             if (_tokensEnumerator.Current != null && tokenType != _tokensEnumerator.Current.Type) {
-                throw new SyntaxException("Got " + _tokensEnumerator.Current.Type +
+                throw new ParserException("Got " + _tokensEnumerator.Current.Type +
                                           $", {tokenType.ToString()} expected" +
                                           $" at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column}",
                     _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
@@ -325,7 +326,8 @@ namespace Compiler {
         }
 
         private bool SameBool(TokenType tokenType) =>
-            _tokensEnumerator.Current != null && _tokensEnumerator.MoveNext() && tokenType == _tokensEnumerator.Current.Type;
+            _tokensEnumerator.Current != null && _tokensEnumerator.MoveNext() &&
+            tokenType == _tokensEnumerator.Current.Type;
 
         private bool SameToCurrentBool(TokenType tokenType) {
             return _tokensEnumerator.Current != null && tokenType == _tokensEnumerator.Current.Type;
@@ -335,13 +337,13 @@ namespace Compiler {
             if (!_tokensEnumerator.MoveNext()) return;
             if (SameToCurrentBool(TokenType.Newline) || SameToCurrentBool(TokenType.Dedent)) return;
             if (_tokensEnumerator.Current != null) Console.WriteLine(_tokensEnumerator.Current.ToString());
-            throw new SyntaxException("Expected new line or semicolon");
+            throw new ParserException("Expected new line or semicolon");
         }
 
         private void MatchIndentationCurrent() {
             if (SameToCurrentBool(TokenType.Newline) || SameToCurrentBool(TokenType.Dedent)) return;
             if (_tokensEnumerator.Current != null) Console.WriteLine(_tokensEnumerator.Current.ToString());
-            throw new SyntaxException("Expected new line or semicolon");
+            throw new ParserException("Expected new line or semicolon");
         }
 
         private Expression MatchReturn() {
@@ -350,7 +352,7 @@ namespace Compiler {
                 var errorRow = _tokensEnumerator.Current.Row;
                 var errorCol = _tokensEnumerator.Current.Column;
                 if (!_tokensEnumerator.MoveNext())
-                    throw new SyntaxException($"Expected token",
+                    throw new ParserException($"Expected token",
                         errorRow, errorCol);
             }
 
@@ -375,7 +377,7 @@ namespace Compiler {
                                     case TokenType.CloseBracket:
                                         return res;
                                     default:
-                                        throw new SyntaxException(
+                                        throw new ParserException(
                                             $"Unexpected token at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column}",
                                             _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column
                                         );
@@ -385,7 +387,7 @@ namespace Compiler {
                         case TokenType.CloseBracket:
                             return res;
                         default:
-                            throw new SyntaxException(
+                            throw new ParserException(
                                 $"Unexpected token at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column}",
                                 _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column
                             );
@@ -395,11 +397,7 @@ namespace Compiler {
             return res;
         }
 
-        public void Parse() {
-            ParseUntil(AstTree.Root);
-        }
-
-        private void ParseUntil(RootNode baseNode, TokenType? stopToken = null) {
+        private void ParseUntil(Ast ast, TokenType? stopToken = null) {
             while (_tokensEnumerator.MoveNext()) {
                 var token = _tokensEnumerator.Current;
                 if (token.Type == stopToken) {
@@ -407,31 +405,35 @@ namespace Compiler {
                 }
 
                 switch (token.Type) {
-                    case TokenType.FuncDefinition: {
-                        var temp = baseNode switch {
-                            INamespace tableContainer =>
-                                ParseFunc(new Dictionary<string, int>(tableContainer.Variables)),
-                            _ => ParseFunc(new Dictionary<string, int>(AstTree.Variables))
-                        };
-
-                        baseNode.AddChild(temp);
+                    case TokenType.IntegerNumber:
+                    case TokenType.Subtract:
+                    case TokenType.OpenBracket: {
+                        var temp = new ExpressionStatement(_tokensEnumerator.Current.Row,
+                            _tokensEnumerator.Current.Column, ParseExpr());
+                        ast.AddChild(temp);
+                        MatchIndentationCurrent();
+                        break;
+                    }
+                    case TokenType.IfCondition: {
+                        var temp = ParseConditional();
+                        ast.AddChild(temp);
                         break;
                     }
                     case TokenType.Identifier: {
                         if (_tokensEnumerator.MoveNext()) {
                             if (_tokensEnumerator.Current != null &&
                                 _tokensEnumerator.Current.Type == TokenType.Assignment) {
-                                _tokensEnumerator.MovePrevious();
+                                _tokensEnumerator.MovePrev();
                                 if (_tokensEnumerator.Current != null) {
                                     var name = _tokensEnumerator.Current.Data;
                                     _tokensEnumerator.MoveNext();
                                     _tokensEnumerator.MoveNext();
                                     var expr = ParseExpr();
-                                    baseNode.AddChild(new AssignStatement(
+                                    ast.AddChild(new AssignStatement(
                                         _tokensEnumerator.Current.Row,
                                         _tokensEnumerator.Current.Column,
                                         name, expr));
-                                    switch (baseNode) {
+                                    switch (ast) {
                                         case INamespace tableContainer: {
                                             tableContainer.AddVariable(name);
                                             break;
@@ -444,16 +446,16 @@ namespace Compiler {
                                 }
                             }
                             else if (_tokensEnumerator.Current.Type == TokenType.OpenBracket) {
-                                _tokensEnumerator.MovePrevious();
+                                _tokensEnumerator.MovePrev();
                                 var tempEx = ParseExpr();
                                 var temp = new ExpressionStatement(tempEx.Row, tempEx.Column, tempEx);
-                                baseNode.AddChild(temp);
+                                ast.AddChild(temp);
                                 MatchIndentation();
                                 break;
                             }
                             else {
-                                _tokensEnumerator.MovePrevious();
-                                baseNode.AddChild(new ExpressionStatement(
+                                _tokensEnumerator.MovePrev();
+                                ast.AddChild(new ExpressionStatement(
                                     _tokensEnumerator.Current.Row,
                                     _tokensEnumerator.Current.Column,
                                     ParseExpr()));
@@ -462,51 +464,43 @@ namespace Compiler {
 
                         break;
                     }
-                    case TokenType.IfCondition: {
-                        var temp = ParseConditional();
-                        baseNode.AddChild(temp);
-                        break;
-                    }
-                    case TokenType.IntegerNumber:
-                    case TokenType.Subtract:
-                    case TokenType.OpenBracket: {
-                        var temp = new ExpressionStatement(_tokensEnumerator.Current.Row,
-                            _tokensEnumerator.Current.Column, ParseExpr());
-                        baseNode.AddChild(temp);
-                        MatchIndentationCurrent();
-                        break;
-                    }
-                    case TokenType.WhileLoop: {
-                        var temp = ParseWhileLoop();
-                        baseNode.AddChild(temp);
-                        break;
-                    }
                     case TokenType.PrintOperator: {
                         var row = _tokensEnumerator.Current.Row;
                         var column = _tokensEnumerator.Current.Column;
                         Same(TokenType.OpenBracket);
                         var temp = new PrintStatement(row, column, ParseExpr());
-                        _tokensEnumerator.MovePrevious();
+                        _tokensEnumerator.MovePrev();
                         SameCurrent(TokenType.CloseBracket);
-                        baseNode.AddChild(temp);
+                        ast.AddChild(temp);
+                        break;
+                    }
+                    case TokenType.WhileLoop: {
+                        var temp = ParseWhileLoop();
+                        ast.AddChild(temp);
                         break;
                     }
                     case TokenType.Return: {
-                        // todo fix exceptions messages
                         if (_currentNameSpace.GetType() != typeof(FuncStatement)) {
-                            throw new SyntaxException(
-                                $"Return outside of function at {_tokensEnumerator.Current.Row}:" +
-                                $"{_tokensEnumerator.Current.Column}",
-                                _tokensEnumerator.Current.Row,
-                                _tokensEnumerator.Current.Column);
+                            throw new ParserException($"Unexpected return at {_tokensEnumerator.Current.Row}:" +
+                                                      $"{_tokensEnumerator.Current.Column}");
                         }
 
                         var currentToken = _tokensEnumerator.Current;
-                        _tokensEnumerator.MovePrevious();
+                        _tokensEnumerator.MovePrev();
                         var currentNameSpace = ((FuncStatement) _currentNameSpace);
                         currentNameSpace.Return = MatchReturn();
-                        baseNode.AddChild(new ReturnStatement(currentToken.Row, currentToken.Column,
+                        ast.AddChild(new ReturnStatement(currentToken.Row, currentToken.Column,
                             currentNameSpace.Return));
+                        break;
+                    }
+                    case TokenType.FuncDefinition: {
+                        var temp = ast switch {
+                            INamespace tableContainer =>
+                                ParseFunc(new Dictionary<string, int>(tableContainer.Variables)),
+                            _ => ParseFunc(new Dictionary<string, int>(AstTree.Variables))
+                        };
+
+                        ast.AddChild(temp);
                         break;
                     }
                     default: {

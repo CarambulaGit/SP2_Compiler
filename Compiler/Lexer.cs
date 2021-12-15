@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 
 namespace Compiler {
-    // todo lexer + parser + generator = static????
     public class Lexer {
         private readonly string _code;
 
@@ -29,8 +28,8 @@ namespace Compiler {
         private static int CountLevel(string str) {
             var spaces = 0;
 
-            for (var i = 0; i < str.Length; i++) {
-                if (str[i] == ' ') {
+            foreach (var chr in str) {
+                if (chr == ' ') {
                     spaces++;
                 }
                 else {
@@ -54,7 +53,7 @@ namespace Compiler {
             var newCurrentLevel = CountLevel(line);
             switch (newCurrentLevel - _currentLevel) {
                 case > 1:
-                    throw new CompilerException($"Not expected indent at {row + 1}");
+                    throw new LexerException($"Not expected indent at {row + 1}");
                 case 1:
                     _currentLevel = newCurrentLevel;
                     Tokens.Add(new Token(TokenType.Indent, "\t", row, 0));
@@ -77,22 +76,25 @@ namespace Compiler {
             var pos = newCurrentLevel;
 
             while (pos < line.Length) {
-                //Console.WriteLine(str[pos]);
-                if (line[pos] == ' ') {
-                    pos++;
-                }
-                // todo remove when change comment detection
-                else if (line[pos] == '#') {
-                    return true;
-                }
-                else if (char.IsDigit(line[pos])) {
-                    pos += StartsWithDigit(line, row, pos);
-                }
-                else if (char.IsLetter(line[pos])) {
-                    pos += StartsWithLetter(line, row, pos);
-                }
-                else if (Constants.SYMBOLS.Contains(line[pos])) {
-                    pos += StartsWithSym(line, row, pos);
+                switch (line[pos]) {
+                    case ' ':
+                        pos++;
+                        break;
+                    case '#':
+                        return true;
+                    default: {
+                        if (char.IsDigit(line[pos])) {
+                            pos += StartsWithDigit(line, row, pos);
+                        }
+                        else if (char.IsLetter(line[pos])) {
+                            pos += StartsWithLetter(line, row, pos);
+                        }
+                        else if (Constants.SYMBOLS.Contains(line[pos])) {
+                            pos += StartsWithSym(line, row, pos);
+                        }
+
+                        break;
+                    }
                 }
             }
 
@@ -108,12 +110,24 @@ namespace Compiler {
                 pos++;
             }
 
-
-            // todo just write string?
             if (!int.TryParse(st.ToString(), out _))
-                throw new CompilerException($"invalid syntax at {str} {row + 1}:{col}");
+                throw new LexerException($"invalid syntax at {str} {row + 1}:{col}");
             Tokens.Add(new Token(TokenType.IntegerNumber, st.ToString(), row, col));
             return st.Length;
+        }
+
+        private int LexerChars(string str, int row, int col, StringBuilder st) {
+            if (st.Length >= 2) {
+                if (LexerTwoChars(str[col], str[col + 1]) != TokenType.NotImplemented) {
+                    Tokens.Add(new Token(LexerTwoChars(str[col], str[col + 1]),
+                        LexerTwoChars(str[col], str[col + 1]).ToString(), row, col));
+                    return 2;
+                }
+            }
+
+            if (LexerSingleChar(str[col]) == TokenType.NotImplemented) return 0;
+            Tokens.Add(new Token(LexerSingleChar(str[col]), LexerSingleChar(str[col]).ToString(), row, col));
+            return 1;
         }
 
         private int StartsWithLetter(string str, int row, int column) {
@@ -126,30 +140,20 @@ namespace Compiler {
                 pos++;
             }
 
-            switch (st.ToString()) {
-                // todo make names consts 
-                case "def":
-                    Tokens.Add(new Token(TokenType.FuncDefinition, st.ToString(), row, column));
-                    break;
-                case "while":
-                    Tokens.Add(new Token(TokenType.WhileLoop, st.ToString(), row, column));
-                    break;
-                case "print":
-                    Tokens.Add(new Token(TokenType.PrintOperator, st.ToString(), row, column));
-                    break;
-                case "return":
-                    Tokens.Add(new Token(TokenType.Return, st.ToString(), row, column));
-                    break;
-                case "if":
-                    Tokens.Add(new Token(TokenType.IfCondition, st.ToString(), row, column));
-                    break;
-                case "else":
-                    Tokens.Add(new Token(TokenType.ElseCondition, st.ToString(), row, column));
-                    break;
-                default:
-                    Tokens.Add(new Token(TokenType.Identifier, st.ToString(), row, column));
-                    break;
-            }
+            if (st.ToString() == Constants.PYTHON_FUNCTION_DEFENITION)
+                Tokens.Add(new Token(TokenType.FuncDefinition, st.ToString(), row, column));
+            else if (st.ToString() == Constants.PYTHON_WHILE)
+                Tokens.Add(new Token(TokenType.WhileLoop, st.ToString(), row, column));
+            else if (st.ToString() == Constants.PYTHON_PRINT)
+                Tokens.Add(new Token(TokenType.PrintOperator, st.ToString(), row, column));
+            else if (st.ToString() == Constants.PYTHON_RETURN)
+                Tokens.Add(new Token(TokenType.Return, st.ToString(), row, column));
+            else if (st.ToString() == Constants.PYTHON_IF)
+                Tokens.Add(new Token(TokenType.IfCondition, st.ToString(), row, column));
+            else if (st.ToString() == Constants.PYTHON_ELSE)
+                Tokens.Add(new Token(TokenType.ElseCondition, st.ToString(), row, column));
+            else
+                Tokens.Add(new Token(TokenType.Identifier, st.ToString(), row, column));
 
             return st.ToString().Length;
         }
@@ -171,21 +175,15 @@ namespace Compiler {
                 return LexerChars(str, row, col, st);
             }
 
-            throw new CompilerException($"Unexpected token {str[col]} at {row + 1}:{col}");
+            throw new LexerException($"Unexpected token {str[col]} at {row + 1}:{col}");
         }
 
-        private int LexerChars(string str, int row, int col, StringBuilder st) {
-            if (st.Length >= 2) {
-                if (LexerTwoChars(str[col], str[col + 1]) != TokenType.NotImplemented) {
-                    Tokens.Add(new Token(LexerTwoChars(str[col], str[col + 1]),
-                        LexerTwoChars(str[col], str[col + 1]).ToString(), row, col));
-                    return 2;
-                }
+        private TokenType LexerTwoChars(int symb1, int symb2) {
+            if (symb1.Equals('!') && symb2.Equals('=')) {
+                return TokenType.NotEqual;
             }
 
-            if (LexerSingleChar(str[col]) == TokenType.NotImplemented) return 0;
-            Tokens.Add(new Token(LexerSingleChar(str[col]), LexerSingleChar(str[col]).ToString(), row, col));
-            return 1;
+            return TokenType.NotImplemented;
         }
 
 
@@ -202,21 +200,6 @@ namespace Compiler {
                 '>' => TokenType.Greater,
                 _ => TokenType.NotImplemented
             };
-        }
-
-        private TokenType LexerTwoChars(int symb1, int symb2) {
-            if (symb1.Equals('!') && symb2.Equals('=')) {
-                return TokenType.NotEqual;
-            }
-
-            return TokenType.NotImplemented;
-        }
-
-
-        public void PrintTokens() {
-            foreach (var token in Tokens) {
-                Console.WriteLine(token.ToString());
-            }
         }
     }
 }

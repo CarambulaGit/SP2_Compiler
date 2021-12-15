@@ -1,7 +1,5 @@
-﻿using System.Collections.Generic;
-
-namespace Compiler {
-    // todo mb struct
+﻿namespace Compiler {
+    // todo to struct?
     public class Token {
         public TokenType Type { get; set; }
 
@@ -36,26 +34,26 @@ namespace Compiler {
 // } 		– 	close brace
 
 public enum TokenType {
-    NotImplemented, // todo remove
-    FuncDefinition,
+    NotImplemented,
     Identifier,
-    OpenBracket,
-    CloseBracket,
-    Colon,
-    Newline,
-    Indent,
     Return,
-    Multiply,
+    Newline,
+    OpenBracket,
+    Colon,
+    Indent,
     Divide,
-    Dedent,
+    CloseBracket,
+    Multiply,
+    FuncDefinition,
     WhileLoop,
+    ElseCondition,
     NotEqual,
     IfCondition,
+    Dedent,
     Greater,
-    Assignment,
-    Subtract,
-    ElseCondition,
-    Comma,
     PrintOperator,
     IntegerNumber,
+    Assignment,
+    Comma,
+    Subtract,
 }

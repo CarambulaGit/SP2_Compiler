@@ -2,8 +2,7 @@
 using System.Collections.Generic;
 
 namespace Compiler {
-    // todo file Expressions with all expressions and etc
-    public abstract class Expression : AstNode {
+    public abstract class Expression : Ast {
         protected Expression(int row, int col) : base(row, col) { }
 
         public virtual void PrintOperation(int depth) {
@@ -70,10 +69,10 @@ namespace Compiler {
     }
 
     public class ConstExpression : Expression {
-        public readonly dynamic Data; // todo
+        public readonly string Value;
 
-        public ConstExpression(int row, int col, dynamic data) : base(row, col) {
-            Data = data;
+        public ConstExpression(int row, int col, string value) : base(row, col) {
+            Value = value;
         }
 
         public override void PrintOperation(int depth) {
@@ -82,7 +81,7 @@ namespace Compiler {
                 Console.Write('\t');
             }
 
-            Console.WriteLine(Data);
+            Console.WriteLine(Value);
         }
     }
 

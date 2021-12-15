@@ -1,22 +1,20 @@
 ﻿using System;
-using System.Runtime.Serialization;
-using System.Text;
 
 namespace Compiler {
-    // todo ParserException
-    public class SyntaxException : Exception {
-        public SyntaxException(string message, int row, int column) : base(
+    public class ParserException : Exception {
+        public ParserException(string message, int row, int column) : base(
             $"{message} at row = {row}, column = {column}") { }
 
-        public SyntaxException() : base() { }
+        public ParserException() : base() { }
 
-        public SyntaxException(string message) : base(message) { }
+        public ParserException(string message) : base(message) { }
     }
 
-    // todo LexerException
-    public class CompilerException : Exception {
-        public CompilerException(string? message) : base(message) { }
+    public class LexerException : Exception {
+        public LexerException(string? message) : base(message) { }
     }
-    
-    // todo AsmGeneratorException
+
+    public class AsmGeneratorException : Exception {
+        public AsmGeneratorException(string? message) : base(message) { }
+    }
 }

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 
 namespace Compiler {
-    //todo remove?
     public class MyEnumerator<T> : IEnumerator<T> {
         private readonly IEnumerator<T> _enumerator;
         private readonly List<T> _buffer;
@@ -28,7 +27,7 @@ namespace Compiler {
             return true;
         }
 
-        public bool MovePrevious() {
+        public bool MovePrev() {
             if (_index <= 0) {
                 return false;
             }
@@ -53,7 +52,7 @@ namespace Compiler {
         public MyEnumerator(IEnumerator<T> enumerator) {
             _enumerator = enumerator ?? throw new ArgumentNullException();
             _buffer = new List<T>();
-            _index--;
+            _index = -1;
         }
     }
 }

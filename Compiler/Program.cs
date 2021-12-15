@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 
 namespace Compiler {
+    // todo lexer + parser + generator = static????
     class Program {
         private static readonly string PythonCode = File.ReadAllText(string.Format("{0}{1}", Directory.GetParent(
             Directory.GetCurrentDirectory()), Constants.INPUT_FILE_NAME));
@@ -27,7 +28,8 @@ namespace Compiler {
         }
 
         private static void WriteCodeToFile(string asmCode) {
-            using var fs = File.Create(Constants.OUTPUT_FILE_NAME);
+            using var fs = File.Create(Directory.GetParent(
+                Directory.GetCurrentDirectory()) + Constants.OUTPUT_FILE_NAME);
             var bytes = new UTF8Encoding(true).GetBytes(asmCode);
             fs.Write(bytes, 0, bytes.Length);
         }

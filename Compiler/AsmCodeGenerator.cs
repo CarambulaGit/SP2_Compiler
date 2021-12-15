@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 using Compiler;
@@ -90,14 +89,14 @@ public class AsmCodeGenerator {
             TokenType.Divide => string.Format(Constants.DIVIDE_ASM, right, left),
             TokenType.NotEqual => string.Format(Constants.NOT_EQUAL_ASM, right, left),
             TokenType.Greater => string.Format(Constants.GREATER_ASM, right, left),
-            _ => throw new CompilerException($"{expression.Operation.ToString()} not implemented yet")
+            _ => throw new AsmGeneratorException($"{expression.Operation.ToString()} not implemented yet")
         };
 
         return operation;
     }
 
     private string GenerateConstExpr(ConstExpression expression) {
-        return string.Format(Constants.CONST_ASM, (object?) expression.Data);
+        return string.Format(Constants.CONST_ASM, (object?) expression.Value);
     }
 
     private string GenerateVarExpr(VarExpression expression) {
@@ -145,7 +144,7 @@ public class AsmCodeGenerator {
             VarExpression varExpression => GenerateVarExpr(varExpression),
             CallExpression callExpression => GenerateCallExpression(callExpression),
             ConditionalExpression conditionalExpression => GenerateConditionalExpression(conditionalExpression),
-            _ => throw new CompilerException(
+            _ => throw new AsmGeneratorException(
                 $"{expression.GetType()} at row = {expression.Row} column = {expression.Column}")
         };
     }
@@ -162,7 +161,7 @@ public class AsmCodeGenerator {
 
     private string TrimPush(string s) => s.EndsWith("push eax\n") ? s[..s.IndexOf("push eax\n", StringComparison.Ordinal)] : s;
 
-    private string GenerateCode(AstNode st) {
+    private string GenerateCode(Ast st) {
         return st switch {
             AssignStatement assignStatement =>
                 GenerateAssigStatement(assignStatement),
@@ -183,7 +182,7 @@ public class AsmCodeGenerator {
             PrintStatement print =>
                 string.Format(StatementCodeDict[print.GetType()],
                     TrimPush(GenerateExpr(print.Expression))),
-            _ => throw new CompilerException(
+            _ => throw new AsmGeneratorException(
                 $"Unknown type: {st.GetType()}" +
                 $" {st.Row + 1}:{st.Column + 1}")
         } ?? throw new Exception();

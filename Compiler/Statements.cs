@@ -1,9 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 
 namespace Compiler {
-    public abstract class Statement : AstNode {
+    public abstract class Statement : Ast {
         protected Statement(int row, int col) : base(row, col) { }
         public string Name { get; set; }
     }
