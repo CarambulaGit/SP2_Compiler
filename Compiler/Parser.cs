@@ -265,8 +265,7 @@ namespace Compiler {
                 if (_tokensEnumerator.Current != null)
                     throw new ParserException($"Variable used before assignment " +
                                               $"\"{_tokensEnumerator.Current.Data.ToString()}\" " +
-                                              $"at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column}",
-                        _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
+                                              $"at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column + 1}");
             var name = _tokensEnumerator.Current.Data;
             if (_tokensEnumerator.Current != null && _tokensEnumerator.MoveNext() &&
                 _tokensEnumerator.Current is {Type: TokenType.OpenBracket}) {
@@ -300,8 +299,7 @@ namespace Compiler {
 
             throw new ParserException($"Variable used before assignment " +
                                       $"\"{_tokensEnumerator.Current.Data.ToString()}\" " +
-                                      $"at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column}",
-                _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
+                                      $"at {_tokensEnumerator.Current.Row}:{_tokensEnumerator.Current.Column + 1}");
         }
 
         private Token Same(TokenType tokenType) {
@@ -320,8 +318,7 @@ namespace Compiler {
             if (_tokensEnumerator.Current != null && tokenType != _tokensEnumerator.Current.Type) {
                 throw new ParserException("Got " + _tokensEnumerator.Current.Type +
                                           $", {tokenType.ToString()} expected" +
-                                          $" at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column}",
-                    _tokensEnumerator.Current.Row, _tokensEnumerator.Current.Column);
+                                          $" at {_tokensEnumerator.Current.Row + 1}:{_tokensEnumerator.Current.Column}");
             }
         }
 

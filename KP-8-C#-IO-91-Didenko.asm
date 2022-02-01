@@ -3,7 +3,7 @@
 option casemap:none
 
 include \masm32\include\masm32rt.inc
-_main        PROTO
+_main PROTO
 
 calculateLCM PROTO
 calculateGCD PROTO
@@ -25,13 +25,11 @@ _main PROC
 
 
 
-
 invoke main
  
 
 printf("\n")
 inkey
-
 ret
 
 _main ENDP
@@ -76,7 +74,7 @@ calculateGCD PROC
 push ebp
 mov ebp, esp
 sub esp, 0
-LoopMyModule0start:
+Loopname0start:
 mov eax, dword ptr[ebp+12] ; n
 push eax
 
@@ -91,7 +89,7 @@ setne al
 push eax
 pop eax
 cmp eax, 0
-je LoopMyModule0end
+je Loopname0end
 mov eax, dword ptr[ebp+12] ; n
 push eax
 
@@ -106,7 +104,7 @@ setl al
 push eax
 pop eax
 cmp eax, 0
-je MyModule1else
+je name1else
 mov eax, dword ptr[ebp+12] ; n
 push eax
 
@@ -121,8 +119,8 @@ push eax
 	pop eax
 	mov dword ptr[ebp+8], eax
 
-jmp MyModule1final
-MyModule1else:
+jmp name1final
+name1else:
 mov eax, dword ptr[ebp+8] ; m
 push eax
 
@@ -137,10 +135,10 @@ push eax
 	pop eax
 	mov dword ptr[ebp+12], eax
 
-MyModule1final:
+name1final:
 
-jmp LoopMyModule0start
-LoopMyModule0end:
+jmp Loopname0start
+Loopname0end:
 
 mov eax, dword ptr[ebp+12] ; n
 push eax
@@ -192,3 +190,4 @@ ret 0
 
 main ENDP
 END _start
+
